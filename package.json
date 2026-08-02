@@ -5,6 +5,7 @@
   "type": "module",
   "description": "A local-first Markdown and file workbench for Chrome, Edge, and Safari.",
   "scripts": {
+    "postinstall": "wxt prepare",
     "dev": "wxt",
     "dev:edge": "wxt -b edge",
     "icons": "node scripts/generate-icons.mjs",
