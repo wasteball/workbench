@@ -1,4 +1,5 @@
 .markdown-workspace {
+  position: relative;
   display: grid;
   height: calc(100vh - 64px);
   min-height: 520px;
@@ -23,6 +24,150 @@
   display: flex;
   align-items: center;
   gap: 4px;
+}
+
+.open-file-control {
+  display: flex;
+  align-items: stretch;
+}
+
+.open-file-control__primary.ui-button {
+  border-radius: 6px 0 0 6px;
+  padding-right: 10px;
+}
+
+.open-file-control__primary.ui-button:hover:not(:disabled) {
+  z-index: 1;
+  transform: none;
+}
+
+.open-file-menu {
+  position: relative;
+}
+
+.open-file-menu summary {
+  display: grid;
+  width: 32px;
+  min-height: 34px;
+  place-items: center;
+  border: 1px solid var(--color-border-strong);
+  border-left: 0;
+  border-radius: 0 6px 6px 0;
+  background: var(--color-canvas-raised);
+  color: var(--color-muted);
+  cursor: pointer;
+  list-style: none;
+}
+
+.open-file-menu summary::-webkit-details-marker {
+  display: none;
+}
+
+.open-file-menu[open] summary,
+.open-file-menu summary:hover,
+.open-file-menu summary:focus-visible {
+  color: var(--color-primary);
+}
+
+.open-file-menu__panel {
+  position: absolute;
+  z-index: 50;
+  top: calc(100% + 8px);
+  left: 0;
+  display: grid;
+  width: 252px;
+  overflow: hidden;
+  border: 1px solid var(--color-border);
+  border-radius: 8px;
+  background: var(--color-canvas);
+  box-shadow: var(--shadow-panel);
+}
+
+.open-file-menu__panel button {
+  display: grid;
+  min-width: 0;
+  min-height: 58px;
+  align-items: center;
+  grid-template-columns: 22px minmax(0, 1fr);
+  gap: 8px;
+  border: 0;
+  border-bottom: 1px solid var(--color-border);
+  padding: 8px 11px;
+  background: transparent;
+  color: var(--color-ink-secondary);
+  text-align: left;
+}
+
+.open-file-menu__panel button:last-child {
+  border-bottom: 0;
+}
+
+.open-file-menu__panel button:hover,
+.open-file-menu__panel button:focus-visible {
+  background: var(--color-canvas-soft);
+  color: var(--color-primary);
+}
+
+.open-file-menu__panel button span {
+  display: grid;
+  min-width: 0;
+}
+
+.open-file-menu__panel button strong {
+  color: var(--color-ink);
+  font-size: 12px;
+}
+
+.open-file-menu__panel button small {
+  overflow: hidden;
+  color: var(--color-muted);
+  font-size: 10px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.workspace-mode-switch {
+  display: grid;
+  height: 36px;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 2px;
+  border: 1px solid var(--color-border);
+  border-radius: 7px;
+  padding: 2px;
+  background: var(--color-canvas-soft);
+}
+
+.workspace-mode-switch button {
+  display: inline-flex;
+  min-width: 58px;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  border: 0;
+  border-radius: 5px;
+  padding: 0 8px;
+  background: transparent;
+  color: var(--color-muted);
+  font-size: 11px;
+  font-weight: 650;
+  white-space: nowrap;
+}
+
+.workspace-mode-switch button:hover,
+.workspace-mode-switch button:focus-visible {
+  color: var(--color-primary);
+}
+
+.workspace-mode-switch button.is-active {
+  background: var(--color-canvas);
+  box-shadow: 0 1px 3px rgba(13, 37, 61, 0.12);
+  color: var(--color-primary);
+}
+
+.review-toggle--active.ui-button {
+  border-color: color-mix(in srgb, var(--color-primary) 38%, var(--color-border));
+  background: var(--color-primary-soft);
+  color: var(--color-primary);
 }
 
 .document-title-field {
@@ -307,6 +452,81 @@
 .markdown-outline .outline-level-3 { padding-left: 25px; }
 .markdown-outline .outline-level-4 { padding-left: 35px; }
 
+.workspace-float-controls {
+  position: absolute;
+  z-index: 7;
+  right: 18px;
+  bottom: 18px;
+  display: grid;
+  gap: 8px;
+}
+
+.markdown-workspace--review-open .workspace-float-controls {
+  right: 348px;
+}
+
+.workspace-float-controls__group {
+  display: grid;
+  width: 40px;
+  gap: 2px;
+  border: 1px solid var(--color-border);
+  border-radius: 7px;
+  padding: 3px;
+  background: color-mix(in srgb, var(--color-canvas) 94%, transparent);
+  box-shadow: var(--shadow-panel);
+}
+
+.workspace-float-controls__group .icon-button {
+  width: 32px;
+  height: 32px;
+}
+
+.workspace-change-count {
+  display: grid;
+  width: 32px;
+  min-height: 40px;
+  place-items: center;
+  gap: 1px;
+  border: 0;
+  border-radius: 5px;
+  padding: 4px 1px;
+  background: var(--color-primary-soft);
+  color: var(--color-primary);
+}
+
+.workspace-change-count span {
+  font-size: 8px;
+  font-variant-numeric: tabular-nums;
+}
+
+.workspace-drop-overlay {
+  position: absolute;
+  z-index: 100;
+  inset: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-direction: column;
+  gap: 5px;
+  border: 2px dashed var(--color-primary);
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--color-canvas) 92%, var(--color-primary));
+  color: var(--color-primary);
+  pointer-events: none;
+  text-align: center;
+}
+
+.workspace-drop-overlay strong {
+  margin-top: 5px;
+  color: var(--color-ink);
+  font-size: 16px;
+}
+
+.workspace-drop-overlay span {
+  color: var(--color-muted);
+  font-size: 12px;
+}
+
 .workspace-statusbar {
   display: grid;
   min-width: 0;
@@ -403,18 +623,46 @@
   }
 }
 
-@media (max-width: 1040px) {
+@media (max-width: 1160px) {
   .markdown-toolbar {
-    grid-template-columns: auto minmax(120px, 1fr) auto auto;
+    grid-template-columns: auto minmax(100px, 1fr) auto auto auto;
   }
 
-  .markdown-toolbar__edit-actions {
+  .markdown-toolbar__edit-actions .history-action {
     display: none;
   }
 
-  .markdown-toolbar__output-actions .icon-button:first-child {
+  .markdown-toolbar__output-actions .output-action--optional {
     display: none;
   }
+}
+
+@media (max-width: 1180px) {
+  .markdown-workspace--review-open .workspace-float-controls {
+    display: none;
+  }
+}
+
+@media (max-width: 920px) {
+  .markdown-toolbar {
+    grid-template-areas:
+      'documents title modes'
+      'tools output output';
+    grid-template-columns: auto minmax(80px, 1fr) auto;
+    grid-template-rows: auto auto;
+    gap: 6px 8px;
+    padding-block: 6px;
+  }
+
+  .markdown-workspace {
+    grid-template-rows: auto minmax(0, 1fr) 30px;
+  }
+
+  .markdown-toolbar__documents { grid-area: documents; }
+  .document-title-field { grid-area: title; }
+  .workspace-mode-switch { grid-area: modes; }
+  .markdown-toolbar__edit-actions { grid-area: tools; }
+  .markdown-toolbar__output-actions { grid-area: output; justify-self: end; }
 }
 
 @media (max-width: 760px) {
@@ -425,9 +673,10 @@
 
   .markdown-toolbar {
     grid-template-areas:
-      'documents title modes'
-      'output output output';
-    grid-template-columns: auto minmax(80px, 1fr) auto;
+      'documents title'
+      'modes tools'
+      'output output';
+    grid-template-columns: minmax(0, 1fr) auto;
     gap: 6px 8px;
     padding: 6px 8px;
   }
@@ -440,8 +689,13 @@
     grid-area: title;
   }
 
-  .markdown-toolbar__modes {
+  .workspace-mode-switch {
     grid-area: modes;
+    justify-self: start;
+  }
+
+  .markdown-toolbar__edit-actions {
+    grid-area: tools;
   }
 
   .markdown-toolbar__output-actions {
@@ -449,9 +703,12 @@
     justify-self: end;
   }
 
-  .markdown-toolbar__output-actions .ui-button:not(.ui-button--primary),
-  .markdown-toolbar__modes .icon-button:nth-child(2) {
+  .markdown-toolbar__output-actions .output-action--optional {
     display: none;
+  }
+
+  .document-title-field input {
+    text-align: right;
   }
 
   .markdown-workspace__body,
@@ -487,8 +744,13 @@
     grid-template-columns: 1fr;
   }
 
-  .workspace-stage--split .editor-pane {
+  .workspace-stage--split .preview-pane {
     display: none;
+  }
+
+  .workspace-float-controls {
+    right: 10px;
+    bottom: 10px;
   }
 
   .workspace-statusbar {
@@ -497,5 +759,25 @@
 
   .workspace-statusbar span:nth-child(2) {
     display: none;
+  }
+}
+
+@media (max-width: 480px) {
+  .markdown-toolbar__documents > .icon-button:last-child,
+  .export-menu {
+    display: none;
+  }
+
+  .open-file-control__primary.ui-button {
+    padding-inline: 9px;
+  }
+
+  .workspace-mode-switch button {
+    min-width: 54px;
+    padding-inline: 6px;
+  }
+
+  .review-toggle.ui-button {
+    padding-inline: 9px;
   }
 }

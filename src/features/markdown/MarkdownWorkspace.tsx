@@ -1,20 +1,25 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { redo, undo } from '@codemirror/commands';
 import { markdown } from '@codemirror/lang-markdown';
-import { openSearchPanel } from '@codemirror/search';
 import { EditorView } from '@codemirror/view';
 import CodeMirror from '@uiw/react-codemirror';
 import {
+  ArrowDownToLine,
+  ArrowUpToLine,
+  ChevronDown,
+  ChevronUp,
   Code2,
-  Columns2,
   Copy,
   Download,
   Eye,
+  FileDiff,
   FilePlus2,
   FileText,
   FolderOpen,
+  Globe2,
   PanelLeftClose,
   PanelLeftOpen,
+  PencilLine,
   Printer,
   Redo2,
   Save,
@@ -25,7 +30,19 @@ import {
 } from 'lucide-react';
 
 import { useDestination } from '@/app/destination-context';
+import { ChangeReviewPanel } from '@/features/markdown/components/ChangeReviewPanel';
+import { FindReplaceBar } from '@/features/markdown/components/FindReplaceBar';
 import { renderMarkdown, type MarkdownRenderResult } from '@/features/markdown/engine/render-markdown';
+import {
+  findTextMatches,
+  replaceAllTextMatches,
+  replaceTextMatch,
+} from '@/features/markdown/engine/find-replace';
+import {
+  revertReviewChange,
+  reviewMarkdownChanges,
+  type ReviewChange,
+} from '@/features/markdown/engine/review-changes';
 import { getExporter } from '@/features/markdown/exporters/registry';
 import { MarkdownPreview } from '@/features/markdown/components/MarkdownPreview';
 import { toggleTask } from '@/features/markdown/engine/toggle-task';
@@ -34,7 +51,12 @@ import { loadMarkdownUrl } from '@/features/markdown/services/load-markdown-url'
 import { documentHandoff } from '@/features/markdown/services/document-handoff';
 import type { PageProps } from '@/features/shared/page-props';
 import { downloadBlob } from '@/platform/files/download-blob';
-import { pickMarkdownFiles, type PickedMarkdownFile } from '@/platform/files/file-picker';
+import {
+  markdownFilesFromDataTransfer,
+  pickMarkdownDirectory,
+  pickMarkdownFiles,
+  type PickedMarkdownFile,
+} from '@/platform/files/file-picker';
 import type { DocumentRecord } from '@/shared/persistence/database';
 import {
   documentService,
@@ -83,13 +105,28 @@ export function MarkdownWorkspace({ route, navigate }: PageProps) {
   const [content, setContent] = useState('');
   const [baseline, setBaseline] = useState('');
   const [title, setTitle] = useState('');
-  const [mode, setMode] = useState<EditorMode>('split');
+  const [mode, setMode] = useState<EditorMode>('preview');
   const [rendered, setRendered] = useState<MarkdownRenderResult>(EMPTY_RENDER);
-  const [openDialog, setOpenDialog] = useState(false);
+  const [openDialog, setOpenDialog] = useState<'all' | 'url' | null>(null);
   const [railOpen, setRailOpen] = useState(() => !isNarrowViewport());
+  const [reviewOpen, setReviewOpen] = useState(false);
+  const [reviewIndex, setReviewIndex] = useState(0);
+  const [findOpen, setFindOpen] = useState(false);
+  const [replaceOpen, setReplaceOpen] = useState(false);
+  const [findQuery, setFindQuery] = useState('');
+  const [replacement, setReplacement] = useState('');
+  const [matchCase, setMatchCase] = useState(false);
+  const [findIndex, setFindIndex] = useState(0);
+  const [dragActive, setDragActive] = useState(false);
+  const [scrollEdges, setScrollEdges] = useState({ canGoTop: false, canGoBottom: false });
   const [status, setStatus] = useState('');
   const [exporting, setExporting] = useState(false);
   const editorView = useRef<EditorView | null>(null);
+  const previewPane = useRef<HTMLDivElement>(null);
+  const openMenu = useRef<HTMLDetailsElement>(null);
+  const dragDepth = useRef(0);
+  const edgeScrollTimer = useRef<number | null>(null);
+  const pendingEditorSelection = useRef<{ from: number; to: number } | null>(null);
   const sessionDocuments = useRef(new Map<string, SessionDocument>());
   const handledRoute = useRef('');
   const lastPersistedSnapshot = useRef('');
@@ -111,6 +148,11 @@ export function MarkdownWorkspace({ route, navigate }: PageProps) {
     if (loaded.content !== null) {
       sessionDocuments.current.set(loaded.record.id, { content: nextContent, baseline: nextBaseline });
     }
+    setMode('preview');
+    setFindOpen(false);
+    setFindQuery('');
+    setReviewOpen(false);
+    setReviewIndex(0);
     setDestination(destinationCopy(loaded.record, Boolean(loaded.record.draftUpdatedAt)));
     setStatus(loaded.needsSource ? '需要重新选择原文件。' : '');
     if (isNarrowViewport()) setRailOpen(false);
@@ -163,7 +205,7 @@ export function MarkdownWorkspace({ route, navigate }: PageProps) {
     } else if (intent === 'new') {
       void createDocument();
     } else if (intent === 'open') {
-      setOpenDialog(true);
+      setOpenDialog('all');
     }
   }, [createDocument, openRecord, route.params]);
 
@@ -179,10 +221,37 @@ export function MarkdownWorkspace({ route, navigate }: PageProps) {
   }, [content]);
 
   const hasChanges = Boolean(active && !active.needsSource && (content !== baseline || title !== active.record.title));
+  const reviewChanges = useMemo(() => reviewMarkdownChanges(baseline, content), [baseline, content]);
+  const findMatches = useMemo(() => findTextMatches(content, findQuery, matchCase), [content, findQuery, matchCase]);
+
+  const applyContent = useCallback((nextContent: string) => {
+    setContent(nextContent);
+    if (active) sessionDocuments.current.set(active.record.id, { content: nextContent, baseline });
+  }, [active, baseline]);
 
   const handleTaskToggle = useCallback((taskIndex: number, checked: boolean) => {
-    setContent((current) => toggleTask(current, taskIndex, checked));
-  }, []);
+    setContent((current) => {
+      const next = toggleTask(current, taskIndex, checked);
+      if (active) sessionDocuments.current.set(active.record.id, { content: next, baseline });
+      return next;
+    });
+  }, [active, baseline]);
+
+  useEffect(() => {
+    if (findMatches.length === 0) {
+      setFindIndex(0);
+      return;
+    }
+    setFindIndex((current) => Math.min(current, findMatches.length - 1));
+  }, [findMatches.length]);
+
+  useEffect(() => {
+    if (reviewChanges.length === 0) {
+      setReviewIndex(0);
+      return;
+    }
+    setReviewIndex((current) => Math.min(current, reviewChanges.length - 1));
+  }, [reviewChanges.length]);
 
   useEffect(() => {
     if (!active || active.needsSource || !hasChanges) return;
@@ -225,6 +294,37 @@ export function MarkdownWorkspace({ route, navigate }: PageProps) {
     activateDocument(loaded);
     await refreshDocuments();
     navigate('markdown', new URLSearchParams({ document: loaded.record.id }));
+  };
+
+  const chooseFiles = async () => {
+    try {
+      const picked = await pickMarkdownFiles();
+      if (picked.length > 0) await importFiles(picked);
+    } catch (error) {
+      setStatus(error instanceof Error ? error.message : '无法打开所选文件。');
+    }
+  };
+
+  const chooseDirectory = async () => {
+    openMenu.current?.removeAttribute('open');
+    try {
+      const picked = await pickMarkdownDirectory();
+      if (picked.length > 0) await importFiles(picked);
+      else setStatus('所选文件夹中没有 Markdown 文档。');
+    } catch (error) {
+      setStatus(error instanceof Error ? error.message : '无法打开所选文件夹。');
+    }
+  };
+
+  const importDrop = async (dataTransfer: DataTransfer) => {
+    setDragActive(false);
+    try {
+      const picked = await markdownFilesFromDataTransfer(dataTransfer);
+      if (picked.length > 0) await importFiles(picked);
+      else setStatus('没有找到可打开的 Markdown 文档。');
+    } catch (error) {
+      setStatus(error instanceof Error ? error.message : '无法读取拖入的内容。');
+    }
   };
 
   const relinkSource = async () => {
@@ -339,14 +439,200 @@ export function MarkdownWorkspace({ route, navigate }: PageProps) {
     await refreshDocuments();
   };
 
+  const openFindPanel = useCallback((withReplace = false) => {
+    if (!active) return;
+    const view = editorView.current?.dom.isConnected ? editorView.current : null;
+    if (view) {
+      const selection = view.state.selection.main;
+      if (selection.from !== selection.to) setFindQuery(view.state.sliceDoc(selection.from, selection.to));
+    }
+    setFindIndex(0);
+    setFindOpen(true);
+    setReplaceOpen(withReplace);
+  }, [active]);
+
+  useEffect(() => {
+    const handleFindShortcut = (event: KeyboardEvent) => {
+      if (!(event.ctrlKey || event.metaKey) || event.altKey) return;
+      const key = event.key.toLocaleLowerCase();
+      if (key !== 'f' && key !== 'h') return;
+      event.preventDefault();
+      event.stopPropagation();
+      openFindPanel(key === 'h');
+    };
+    window.addEventListener('keydown', handleFindShortcut, true);
+    return () => window.removeEventListener('keydown', handleFindShortcut, true);
+  }, [openFindPanel]);
+
+  const stepFind = (direction: -1 | 1) => {
+    if (findMatches.length === 0) return;
+    setFindIndex((current) => (current + direction + findMatches.length) % findMatches.length);
+  };
+
+  useEffect(() => {
+    if (!findOpen || mode === 'preview') return;
+    const match = findMatches[findIndex];
+    if (!match) return;
+    window.requestAnimationFrame(() => {
+      const view = editorView.current;
+      if (!view) return;
+      view.dispatch({ selection: { anchor: match.from, head: match.to }, scrollIntoView: true });
+    });
+  }, [findIndex, findMatches, findOpen, mode]);
+
+  const replaceCurrentMatch = () => {
+    const match = findMatches[findIndex];
+    if (!match) return;
+    applyContent(replaceTextMatch(content, match, replacement));
+    setStatus('已替换 1 处。');
+  };
+
+  const replaceEveryMatch = () => {
+    if (findMatches.length === 0) return;
+    const count = findMatches.length;
+    applyContent(replaceAllTextMatches(content, findMatches, replacement));
+    setFindIndex(0);
+    setStatus(`已替换 ${count} 处。`);
+  };
+
+  const selectReviewChange = (index: number) => {
+    const change = reviewChanges[index];
+    if (!change) return;
+    setReviewIndex(index);
+    pendingEditorSelection.current = { from: change.currentFrom, to: change.currentTo };
+    if (mode === 'preview') setMode('split');
+    window.setTimeout(() => {
+      const view = editorView.current;
+      const selection = pendingEditorSelection.current;
+      if (!view || !selection) return;
+      view.dispatch({ selection: { anchor: selection.from, head: selection.to }, scrollIntoView: true });
+      view.focus();
+      pendingEditorSelection.current = null;
+    }, 0);
+  };
+
+  const stepReview = (direction: -1 | 1) => {
+    if (reviewChanges.length === 0) return;
+    selectReviewChange((reviewIndex + direction + reviewChanges.length) % reviewChanges.length);
+  };
+
+  const revertChange = (change: ReviewChange) => {
+    applyContent(revertReviewChange(content, change));
+    setStatus('已撤回这处改动。');
+  };
+
+  const revertAllChanges = () => {
+    if (reviewChanges.length === 0) return;
+    if (!window.confirm(`撤回全部 ${reviewChanges.length} 处未保存改动？`)) return;
+    applyContent(baseline);
+    setReviewIndex(0);
+    setStatus('已恢复到上次保存的内容。');
+  };
+
+  const scrollElement = useCallback((): HTMLElement | null => {
+    if (mode !== 'preview') {
+      const editorScroll = editorView.current?.scrollDOM;
+      return editorScroll?.isConnected ? editorScroll : null;
+    }
+    return previewPane.current;
+  }, [mode]);
+
+  useEffect(() => {
+    let element: HTMLElement | null = null;
+    const update = () => {
+      if (!element) return;
+      const maximum = Math.max(0, element.scrollHeight - element.clientHeight);
+      setScrollEdges({ canGoTop: element.scrollTop > 8, canGoBottom: element.scrollTop < maximum - 8 });
+    };
+    let mutationObserver: MutationObserver | null = null;
+    let resizeObserver: ResizeObserver | null = null;
+    const frame = window.requestAnimationFrame(() => {
+      element = scrollElement();
+      if (!element) return;
+      element.addEventListener('scroll', update, { passive: true });
+      mutationObserver = new MutationObserver(update);
+      mutationObserver.observe(element, { childList: true, subtree: true });
+      resizeObserver = new ResizeObserver(update);
+      resizeObserver.observe(element);
+      update();
+    });
+    return () => {
+      window.cancelAnimationFrame(frame);
+      element?.removeEventListener('scroll', update);
+      mutationObserver?.disconnect();
+      resizeObserver?.disconnect();
+    };
+  }, [active?.record.id, content, mode, rendered.html, scrollElement]);
+
+  const scrollToEdge = (edge: 'top' | 'bottom') => {
+    const element = scrollElement();
+    if (!element) return;
+    if (edgeScrollTimer.current !== null) window.clearTimeout(edgeScrollTimer.current);
+    const target = () => edge === 'top' ? 0 : Math.max(0, element.scrollHeight - element.clientHeight);
+    const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    element.scrollTo({ top: target(), behavior: reduceMotion ? 'auto' : 'smooth' });
+    if (reduceMotion) return;
+    edgeScrollTimer.current = window.setTimeout(() => {
+      edgeScrollTimer.current = null;
+      const latestTarget = target();
+      if (Math.abs(element.scrollTop - latestTarget) > 2) {
+        element.scrollTo({ top: latestTarget, behavior: 'auto' });
+      }
+    }, 700);
+  };
+
+  useEffect(() => () => {
+    if (edgeScrollTimer.current !== null) window.clearTimeout(edgeScrollTimer.current);
+  }, [active?.record.id, mode]);
+
   const extensions = useMemo(() => [markdown(), EditorView.lineWrapping], []);
 
   return (
-    <div className={`markdown-workspace ${railOpen ? '' : 'markdown-workspace--rail-closed'}`}>
+    <div
+      className={`markdown-workspace ${railOpen ? '' : 'markdown-workspace--rail-closed'} ${reviewOpen ? 'markdown-workspace--review-open' : ''}`}
+      onDragEnter={(event) => {
+        if (!Array.from(event.dataTransfer.types).includes('Files')) return;
+        event.preventDefault();
+        dragDepth.current += 1;
+        setDragActive(true);
+      }}
+      onDragLeave={(event) => {
+        if (!Array.from(event.dataTransfer.types).includes('Files')) return;
+        event.preventDefault();
+        dragDepth.current = Math.max(0, dragDepth.current - 1);
+        if (dragDepth.current === 0) setDragActive(false);
+      }}
+      onDragOver={(event) => {
+        if (!Array.from(event.dataTransfer.types).includes('Files')) return;
+        event.preventDefault();
+        event.dataTransfer.dropEffect = 'copy';
+      }}
+      onDrop={(event) => {
+        if (!Array.from(event.dataTransfer.types).includes('Files')) return;
+        event.preventDefault();
+        dragDepth.current = 0;
+        void importDrop(event.dataTransfer);
+      }}
+    >
       <header className="markdown-toolbar">
         <div className="markdown-toolbar__group markdown-toolbar__documents">
           <IconButton icon={railOpen ? PanelLeftClose : PanelLeftOpen} label={railOpen ? '收起文档列表' : '展开文档列表'} onClick={() => setRailOpen((value) => !value)} />
-          <Button icon={FolderOpen} onClick={() => setOpenDialog(true)} size="small">打开</Button>
+          <div className="open-file-control">
+            <Button className="open-file-control__primary" icon={FileText} onClick={() => void chooseFiles()} size="small">打开文件</Button>
+            <details className="open-file-menu" ref={openMenu}>
+              <summary aria-label="其他打开方式" title="其他打开方式"><ChevronDown aria-hidden="true" size={16} /></summary>
+              <div className="open-file-menu__panel">
+                <button onClick={() => void chooseDirectory()} type="button">
+                  <FolderOpen aria-hidden="true" size={17} />
+                  <span><strong>打开文件夹</strong><small>读取其中的 Markdown 文档</small></span>
+                </button>
+                <button onClick={() => { openMenu.current?.removeAttribute('open'); setOpenDialog('url'); }} type="button">
+                  <Globe2 aria-hidden="true" size={17} />
+                  <span><strong>从网址打开</strong><small>支持直链、GitHub 和 Gist</small></span>
+                </button>
+              </div>
+            </details>
+          </div>
           <IconButton icon={FilePlus2} label="新建文档" onClick={() => void createDocument()} />
         </div>
 
@@ -355,21 +641,22 @@ export function MarkdownWorkspace({ route, navigate }: PageProps) {
           <input disabled={!active} onChange={(event) => setTitle(event.target.value)} value={active ? title : '未打开文档'} />
         </label>
 
-        <div className="markdown-toolbar__group markdown-toolbar__modes" aria-label="工作区模式">
-          <IconButton active={mode === 'preview'} icon={Eye} label="阅读" onClick={() => setMode('preview')} />
-          <IconButton active={mode === 'split'} icon={Columns2} label="分屏" onClick={() => setMode('split')} />
-          <IconButton active={mode === 'source'} icon={Code2} label="源码" onClick={() => setMode('source')} />
+        <div className="workspace-mode-switch" aria-label="工作区模式" role="group">
+          <button aria-pressed={mode === 'preview'} className={mode === 'preview' ? 'is-active' : ''} onClick={() => setMode('preview')} title="阅读模式" type="button"><Eye aria-hidden="true" size={15} /><span>阅读</span></button>
+          <button aria-pressed={mode === 'split'} className={mode === 'split' ? 'is-active' : ''} onClick={() => setMode('split')} title="编辑模式" type="button"><PencilLine aria-hidden="true" size={15} /><span>编辑</span></button>
+          <button aria-pressed={mode === 'source'} className={mode === 'source' ? 'is-active' : ''} onClick={() => setMode('source')} title="源码模式" type="button"><Code2 aria-hidden="true" size={15} /><span>源码</span></button>
         </div>
 
         <div className="markdown-toolbar__group markdown-toolbar__edit-actions">
-          <IconButton disabled={!active || mode === 'preview'} icon={Undo2} label="撤销" onClick={() => { if (editorView.current) undo(editorView.current); }} />
-          <IconButton disabled={!active || mode === 'preview'} icon={Redo2} label="重做" onClick={() => { if (editorView.current) redo(editorView.current); }} />
-          <IconButton disabled={!active || mode === 'preview'} icon={Search} label="查找和替换" onClick={() => { if (editorView.current) openSearchPanel(editorView.current); }} />
+          <IconButton className="history-action" disabled={!active || mode === 'preview'} icon={Undo2} label="撤销" onClick={() => { if (editorView.current) undo(editorView.current); }} />
+          <IconButton className="history-action" disabled={!active || mode === 'preview'} icon={Redo2} label="重做" onClick={() => { if (editorView.current) redo(editorView.current); }} />
+          <IconButton active={findOpen} disabled={!active} icon={Search} label="查找和替换" onClick={() => openFindPanel(false)} />
+          <Button className={reviewOpen ? 'review-toggle review-toggle--active' : 'review-toggle'} disabled={!active || active.needsSource} icon={FileDiff} onClick={() => setReviewOpen((value) => !value)} size="small">{reviewChanges.length > 0 ? `改动 ${reviewChanges.length}` : '改动'}</Button>
         </div>
 
         <div className="markdown-toolbar__group markdown-toolbar__output-actions">
-          <IconButton disabled={!active?.content && !content} icon={Copy} label="复制 HTML" onClick={() => void copyHtml()} />
-          <IconButton disabled={!active || active.needsSource} icon={Printer} label="打印或另存 PDF" onClick={() => { setMode('preview'); window.setTimeout(() => window.print(), 80); }} />
+          <IconButton className="output-action--optional" disabled={!active?.content && !content} icon={Copy} label="复制 HTML" onClick={() => void copyHtml()} />
+          <IconButton className="output-action--optional" disabled={!active || active.needsSource} icon={Printer} label="打印或另存 PDF" onClick={() => { setMode('preview'); window.setTimeout(() => window.print(), 80); }} />
           <details className="export-menu">
             <summary aria-label="导出文档"><Download aria-hidden="true" size={17} /><span>导出</span></summary>
             <div className="export-menu__panel">
@@ -381,6 +668,24 @@ export function MarkdownWorkspace({ route, navigate }: PageProps) {
           <Button disabled={!active || active.needsSource} icon={Save} onClick={() => void saveCurrent()} size="small">保存</Button>
           <Button disabled={!active || active.needsSource} icon={Share2} onClick={() => void shareCurrent()} size="small" variant="primary">分享</Button>
         </div>
+
+        <FindReplaceBar
+          current={findIndex}
+          matchCase={matchCase}
+          onClose={() => setFindOpen(false)}
+          onMatchCaseChange={setMatchCase}
+          onQueryChange={(value) => { setFindQuery(value); setFindIndex(0); }}
+          onReplaceAll={replaceEveryMatch}
+          onReplaceOne={replaceCurrentMatch}
+          onReplaceOpenChange={setReplaceOpen}
+          onReplacementChange={setReplacement}
+          onStep={stepFind}
+          open={findOpen}
+          query={findQuery}
+          replaceOpen={replaceOpen}
+          replacement={replacement}
+          total={findMatches.length}
+        />
       </header>
 
       <div className="markdown-workspace__body">
@@ -407,7 +712,7 @@ export function MarkdownWorkspace({ route, navigate }: PageProps) {
             <div className="workspace-welcome__mark"><FileText aria-hidden="true" size={28} /></div>
             <h1>打开一份 Markdown</h1>
             <p>内容默认在本机处理；未连接存储也可以阅读、编辑和导出。</p>
-            <div><Button icon={FolderOpen} onClick={() => setOpenDialog(true)} variant="primary">打开文档</Button><Button icon={FilePlus2} onClick={() => void createDocument()}>新建文档</Button></div>
+            <div><Button icon={FileText} onClick={() => void chooseFiles()} variant="primary">打开文件</Button><Button icon={FolderOpen} onClick={() => void chooseDirectory()}>打开文件夹</Button><Button icon={FilePlus2} onClick={() => void createDocument()} variant="quiet">新建文档</Button></div>
           </section>
         ) : active.needsSource ? (
           <section className="workspace-welcome">
@@ -424,27 +729,55 @@ export function MarkdownWorkspace({ route, navigate }: PageProps) {
                   basicSetup={{ foldGutter: true, highlightActiveLine: true, highlightActiveLineGutter: true, autocompletion: true }}
                   extensions={extensions}
                   height="100%"
-                  onChange={(value) => {
-                    setContent(value);
-                    if (active) sessionDocuments.current.set(active.record.id, { content: value, baseline });
+                  onChange={applyContent}
+                  onCreateEditor={(view) => {
+                    editorView.current = view;
+                    const selection = pendingEditorSelection.current;
+                    if (!selection) return;
+                    window.requestAnimationFrame(() => {
+                      view.dispatch({ selection: { anchor: selection.from, head: selection.to }, scrollIntoView: true });
+                      view.focus();
+                      pendingEditorSelection.current = null;
+                    });
                   }}
-                  onCreateEditor={(view) => { editorView.current = view; }}
                   placeholder="从这里开始写作…"
                   value={content}
                 />
               </div>
             ) : null}
             {mode !== 'source' ? (
-              <div className="preview-pane"><MarkdownPreview html={rendered.html} onTaskToggle={handleTaskToggle} /></div>
+              <div className="preview-pane" ref={previewPane}><MarkdownPreview html={rendered.html} onTaskToggle={handleTaskToggle} search={findOpen ? { query: findQuery, matchCase, current: findIndex } : undefined} /></div>
             ) : null}
           </section>
         )}
 
-        {active && !active.needsSource && mode !== 'source' && rendered.headings.length > 0 ? (
+        {active && !active.needsSource && !reviewOpen && mode !== 'source' && rendered.headings.length > 0 ? (
           <aside className="markdown-outline">
             <strong>大纲</strong>
-            <nav>{rendered.headings.map((heading) => <button className={`outline-level-${heading.level}`} key={heading.id} onClick={() => document.getElementById(heading.id)?.scrollIntoView({ behavior: 'smooth', block: 'start' })} type="button">{heading.text}</button>)}</nav>
+            <nav>{rendered.headings.map((heading) => <button className={`outline-level-${heading.level}`} key={heading.id} onClick={() => previewPane.current?.querySelector<HTMLElement>(`#${CSS.escape(heading.id)}`)?.scrollIntoView({ behavior: 'smooth', block: 'start' })} type="button">{heading.text}</button>)}</nav>
           </aside>
+        ) : null}
+
+        {active && !active.needsSource && reviewOpen ? (
+          <ChangeReviewPanel changes={reviewChanges} current={reviewIndex} onClose={() => setReviewOpen(false)} onRevert={revertChange} onRevertAll={revertAllChanges} onSelect={selectReviewChange} onStep={stepReview} />
+        ) : null}
+
+        {active && !active.needsSource && (reviewChanges.length > 0 || scrollEdges.canGoTop || scrollEdges.canGoBottom) ? (
+          <nav aria-label="文档快速导航" className="workspace-float-controls">
+            {!reviewOpen && reviewChanges.length > 0 ? (
+              <div className="workspace-float-controls__group workspace-float-controls__changes">
+                <IconButton icon={ChevronUp} label="上一处改动" onClick={() => stepReview(-1)} />
+                <button aria-label="打开改动审阅" className="workspace-change-count" onClick={() => setReviewOpen(true)} title="打开改动审阅" type="button"><FileDiff aria-hidden="true" size={15} /><span>{reviewIndex + 1}/{reviewChanges.length}</span></button>
+                <IconButton icon={ChevronDown} label="下一处改动" onClick={() => stepReview(1)} />
+              </div>
+            ) : null}
+            {scrollEdges.canGoTop || scrollEdges.canGoBottom ? (
+              <div className="workspace-float-controls__group">
+                {scrollEdges.canGoTop ? <IconButton icon={ArrowUpToLine} label="回到顶部" onClick={() => scrollToEdge('top')} /> : null}
+                {scrollEdges.canGoBottom ? <IconButton icon={ArrowDownToLine} label="回到底部" onClick={() => scrollToEdge('bottom')} /> : null}
+              </div>
+            ) : null}
+          </nav>
         ) : null}
       </div>
 
@@ -454,7 +787,9 @@ export function MarkdownWorkspace({ route, navigate }: PageProps) {
         <span>{rendered.wordCount.toLocaleString('zh-CN')} 字 · 约 {rendered.readingMinutes} 分钟</span>
       </footer>
 
-      <OpenDocumentDialog onClose={() => setOpenDialog(false)} onFiles={importFiles} onUrl={importUrl} open={openDialog} />
+      {dragActive ? <div aria-hidden="true" className="workspace-drop-overlay"><FileText size={34} /><strong>松开即可打开</strong><span>支持 Markdown 文件或文件夹</span></div> : null}
+
+      <OpenDocumentDialog onClose={() => setOpenDialog(null)} onFiles={importFiles} onUrl={importUrl} open={openDialog !== null} sourceMode={openDialog ?? 'all'} />
     </div>
   );
 }

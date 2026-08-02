@@ -170,84 +170,164 @@
   padding: 8px 0;
 }
 
+.markdown-preview__body::highlight(workbench-find-match) {
+  background: color-mix(in srgb, #f0b429 38%, transparent);
+  color: inherit;
+}
+
+.markdown-preview__body::highlight(workbench-find-current) {
+  background: #f0b429;
+  color: #17202a;
+}
+
 .mermaid-figure {
   margin: 22px 0;
-  border-block: 1px solid var(--color-border);
-  padding: 20px 0 10px;
+  overflow: hidden;
+  border: 1px solid var(--color-border);
+  border-radius: 8px;
+  background: var(--color-canvas-soft);
 }
 
-.mermaid-figure__toolbar {
+.mermaid-figure__header {
   display: flex;
   align-items: center;
-  justify-content: flex-end;
-  gap: 5px;
-  margin-bottom: 8px;
+  justify-content: space-between;
+  gap: 12px;
+  min-height: 42px;
+  border-bottom: 1px solid var(--color-border);
+  padding: 7px 10px 7px 13px;
+  background: var(--color-canvas-soft);
+  color: var(--color-muted);
   font-family: var(--font-ui);
+  font-size: 11px;
+  font-weight: 650;
 }
 
-.mermaid-figure__tool {
-  display: inline-grid;
-  width: 28px;
-  height: 28px;
-  place-items: center;
+.mermaid-figure__actions {
+  display: flex;
+  gap: 5px;
+}
+
+.mermaid-figure__actions button {
+  min-height: 28px;
   border: 1px solid var(--color-border);
   border-radius: 5px;
+  padding: 3px 8px;
   background: var(--color-canvas);
-  color: var(--color-text);
+  color: var(--color-ink-secondary);
   cursor: pointer;
-  font-size: 16px;
-  line-height: 1;
+  font-family: var(--font-ui);
+  font-size: 11px;
 }
 
-.mermaid-figure__tool:hover,
-.mermaid-figure__tool:focus-visible {
+.mermaid-figure__actions button:hover,
+.mermaid-figure__actions button:focus-visible {
   border-color: var(--color-primary);
   color: var(--color-primary);
 }
 
-.mermaid-figure__zoom {
-  min-width: 42px;
-  color: var(--color-muted);
-  font-size: 12px;
-  text-align: center;
+.mermaid-figure__viewport {
+  position: relative;
+  min-height: 160px;
+  overflow: hidden;
+  background: var(--color-canvas);
+  cursor: grab;
+  touch-action: none;
+  user-select: none;
 }
 
-.mermaid-figure__canvas {
-  display: grid;
-  min-height: 120px;
-  place-items: center;
-  overflow: auto;
-  background: #fff;
+.mermaid-figure__viewport--dragging {
+  cursor: grabbing;
 }
 
-.mermaid-figure__canvas svg {
+.mermaid-figure__stage {
+  position: absolute;
+  top: 0;
+  left: 0;
+  transform-origin: 0 0;
+  will-change: transform;
+}
+
+.mermaid-figure__stage svg {
+  display: block;
   max-width: none;
-  height: auto;
+}
+
+.mermaid-figure__controls {
+  position: absolute;
+  z-index: 2;
+  top: 10px;
+  right: 10px;
+  display: flex;
+  gap: 2px;
+  border: 1px solid var(--color-border);
+  border-radius: 7px;
+  padding: 3px;
+  background: color-mix(in srgb, var(--color-canvas) 88%, transparent);
+  box-shadow: var(--shadow-panel);
+  opacity: 0;
+  pointer-events: none;
+  transform: translateY(-3px);
+  transition: opacity 150ms ease, transform 150ms ease;
+}
+
+.mermaid-figure__viewport:hover .mermaid-figure__controls,
+.mermaid-figure__controls:focus-within {
+  opacity: 1;
+  pointer-events: auto;
+  transform: none;
+}
+
+.mermaid-figure__controls button {
+  display: inline-grid;
+  width: 30px;
+  height: 30px;
+  place-items: center;
+  border: 0;
+  border-radius: 5px;
+  background: transparent;
+  color: var(--color-ink-secondary);
+  cursor: pointer;
+  font-family: var(--font-ui);
+  font-size: 14px;
+}
+
+.mermaid-figure__controls button:hover,
+.mermaid-figure__controls button:focus-visible {
+  background: var(--color-primary-soft);
+  color: var(--color-primary);
+}
+
+.markdown-preview__body pre.mermaid-figure__source {
+  display: none;
+  margin: 0;
+  border: 0;
+  border-radius: 0;
+}
+
+.mermaid-figure[data-view='source'] .mermaid-figure__viewport {
+  display: none;
+}
+
+.mermaid-figure[data-view='source'] .mermaid-figure__source {
+  display: block;
 }
 
 .mermaid-figure:fullscreen {
-  box-sizing: border-box;
   width: 100vw;
   height: 100vh;
   margin: 0;
-  padding: 24px;
-  overflow: auto;
+  border: 0;
+  border-radius: 0;
   background: var(--color-canvas);
 }
 
-.mermaid-figure:fullscreen .mermaid-figure__canvas {
-  height: calc(100vh - 100px);
-}
-
-.mermaid-figure details {
-  margin-top: 10px;
-  color: var(--color-muted);
-  font-family: var(--font-ui);
-  font-size: 12px;
-}
-
-.mermaid-figure details pre {
-  margin-top: 8px;
+@media (hover: none) {
+  .mermaid-figure__controls {
+    opacity: 1;
+    pointer-events: auto;
+    transform: none;
+  }
 }
 
 .markdown-preview__body .hljs-keyword,
@@ -291,6 +371,10 @@
   .markdown-toolbar,
   .document-rail,
   .markdown-outline,
+  .change-review-panel,
+  .find-replace-bar,
+  .workspace-float-controls,
+  .workspace-drop-overlay,
   .workspace-statusbar,
   .editor-pane {
     display: none !important;

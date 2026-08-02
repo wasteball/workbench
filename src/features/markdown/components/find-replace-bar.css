@@ -1,0 +1,84 @@
+.find-replace-bar {
+  position: absolute;
+  z-index: 40;
+  top: calc(100% + 8px);
+  right: 12px;
+  display: grid;
+  width: min(520px, calc(100vw - 36px));
+  gap: 7px;
+  border: 1px solid var(--color-border-strong);
+  border-radius: 8px;
+  padding: 8px;
+  background: var(--color-canvas);
+  box-shadow: var(--shadow-panel);
+}
+
+.find-replace-bar__line {
+  display: grid;
+  min-width: 0;
+  align-items: center;
+  grid-template-columns: 34px minmax(150px, 1fr) 34px 34px 34px 34px;
+  gap: 4px;
+}
+
+.find-replace-bar__input {
+  position: relative;
+  min-width: 0;
+}
+
+.find-replace-bar__input input {
+  width: 100%;
+  min-width: 0;
+  min-height: 34px;
+  border: 1px solid var(--color-border-strong);
+  border-radius: 6px;
+  padding: 6px 58px 6px 10px;
+  background: var(--color-canvas);
+  color: var(--color-ink);
+}
+
+.find-replace-bar__input input:focus {
+  border-color: var(--color-primary);
+  outline: 2px solid color-mix(in srgb, var(--color-primary) 16%, transparent);
+}
+
+.find-replace-bar__input small {
+  position: absolute;
+  top: 50%;
+  right: 9px;
+  color: var(--color-muted);
+  font-size: 10px;
+  font-variant-numeric: tabular-nums;
+  transform: translateY(-50%);
+}
+
+.find-replace-bar__replace {
+  grid-template-columns: 34px minmax(150px, 1fr) auto auto;
+}
+
+.find-replace-bar__replace .find-replace-bar__input input {
+  padding-right: 10px;
+}
+
+@media (max-width: 620px) {
+  .find-replace-bar {
+    right: 8px;
+    width: calc(100vw - 16px);
+  }
+
+  .find-replace-bar__line {
+    grid-template-columns: 34px minmax(100px, 1fr) 34px 34px 34px;
+  }
+
+  .find-replace-bar__line > .icon-button:nth-of-type(2) {
+    display: none;
+  }
+
+  .find-replace-bar__replace {
+    grid-template-columns: minmax(100px, 1fr) auto auto;
+  }
+
+  .find-replace-bar__indent {
+    display: none;
+  }
+}

@@ -13,11 +13,13 @@ import './open-document-dialog.css';
 
 export function OpenDocumentDialog({
   open,
+  sourceMode = 'all',
   onClose,
   onFiles,
   onUrl,
 }: {
   open: boolean;
+  sourceMode?: 'all' | 'url';
   onClose: () => void;
   onFiles: (files: PickedMarkdownFile[]) => Promise<void>;
   onUrl: (url: string) => Promise<void>;
@@ -74,11 +76,13 @@ export function OpenDocumentDialog({
   return (
     <div className="dialog-backdrop" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget && !busy) onClose(); }}>
       <section aria-labelledby="open-document-title" aria-modal="true" className="open-document-dialog" role="dialog">
-        <header><div><p className="page-kicker">打开文档</p><h2 id="open-document-title">选择内容来源</h2></div><IconButton disabled={busy} icon={X} label="关闭" onClick={onClose} /></header>
-        <div className="open-source-actions">
-          <button disabled={busy} onClick={() => void choose(false)} type="button"><FileText aria-hidden="true" size={22} /><span><strong>Markdown 文件</strong><small>可一次选择多个文件</small></span></button>
-          <button disabled={busy} onClick={() => void choose(true)} type="button"><FolderOpen aria-hidden="true" size={22} /><span><strong>整个文件夹</strong><small>读取其中的 Markdown 文档</small></span></button>
-        </div>
+        <header><div><p className="page-kicker">打开 Markdown</p><h2 id="open-document-title">{sourceMode === 'url' ? '从网址打开' : '选择内容来源'}</h2></div><IconButton disabled={busy} icon={X} label="关闭" onClick={onClose} /></header>
+        {sourceMode === 'all' ? (
+          <div className="open-source-actions">
+            <button disabled={busy} onClick={() => void choose(false)} type="button"><FileText aria-hidden="true" size={22} /><span><strong>Markdown 文件</strong><small>可一次选择多个文件</small></span></button>
+            <button disabled={busy} onClick={() => void choose(true)} type="button"><FolderOpen aria-hidden="true" size={22} /><span><strong>整个文件夹</strong><small>读取其中的 Markdown 文档</small></span></button>
+          </div>
+        ) : null}
         <div className="open-url-form">
           <label className="settings-field"><span>从网址读取</span><span className="url-input-row"><Globe2 aria-hidden="true" size={18} /><input disabled={busy} onChange={(event) => setUrl(event.target.value)} onKeyDown={(event) => { if (event.key === 'Enter') void submitUrl(); }} placeholder="支持 Markdown 直链、GitHub 文件页和 Gist" value={url} /></span></label>
           <Button disabled={busy} onClick={() => void submitUrl()} variant="primary">{busy ? '正在读取' : '打开网址'}</Button>
