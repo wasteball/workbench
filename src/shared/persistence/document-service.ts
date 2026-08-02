@@ -17,6 +17,35 @@ export interface FileRegistration {
   handle?: FileSystemFileHandle;
 }
 
+export interface DocumentBatchResult {
+  records: DocumentRecord[];
+  removedIds: string[];
+  preservedIds: string[];
+}
+
+function normalizedSourceLabel(value: string): string {
+  return value.replace(/\\/g, '/').replace(/^\.\//, '').toLocaleLowerCase();
+}
+
+function fileRecord(file: FileRegistration, now: number, index: number, existing?: DocumentRecord): DocumentRecord {
+  return {
+    ...(existing ?? {}),
+    id: existing?.id ?? nanoid(),
+    title: file.name.replace(/\.(md|markdown|txt)$/i, '') || file.name,
+    source: 'file',
+    sourceLabel: file.relativePath,
+    sourceUrl: null,
+    draftContent: existing?.draftContent ?? null,
+    baselineContent: existing?.baselineContent ?? null,
+    ...(file.handle ? { fileHandle: file.handle } : existing?.fileHandle ? { fileHandle: existing.fileHandle } : {}),
+    createdAt: existing?.createdAt ?? now - index,
+    updatedAt: existing?.draftUpdatedAt ? existing.updatedAt : now - index,
+    draftUpdatedAt: existing?.draftUpdatedAt ?? null,
+    lastDestination: existing?.lastDestination ?? 'original-file',
+    lastSavedAt: existing?.lastSavedAt ?? null,
+  };
+}
+
 export function titleFromMarkdown(content: string, fallback = '未命名文档'): string {
   const heading = content.match(/^#\s+(.+)$/m)?.[1]?.trim();
   return heading?.slice(0, 120) || fallback;
@@ -76,23 +105,35 @@ export const documentService = {
 
   async registerFiles(files: readonly FileRegistration[]): Promise<DocumentRecord[]> {
     const now = Date.now();
-    const records = files.map((file, index): DocumentRecord => ({
-      id: nanoid(),
-      title: file.name.replace(/\.(md|markdown|txt)$/i, '') || file.name,
-      source: 'file',
-      sourceLabel: file.relativePath,
-      sourceUrl: null,
-      draftContent: null,
-      baselineContent: null,
-      ...(file.handle ? { fileHandle: file.handle } : {}),
-      createdAt: now - index,
-      updatedAt: now - index,
-      draftUpdatedAt: null,
-      lastDestination: 'original-file',
-      lastSavedAt: null,
-    }));
+    const existingFiles = await db.documents.where('source').equals('file').toArray();
+    const bySource = new Map(existingFiles.map((record) => [normalizedSourceLabel(record.sourceLabel), record]));
+    const records = files.map((file, index) => {
+      const key = normalizedSourceLabel(file.relativePath);
+      const record = fileRecord(file, now, index, bySource.get(key));
+      bySource.set(key, record);
+      return record;
+    });
     if (records.length > 0) await db.documents.bulkPut(records);
     return records;
+  },
+
+  async replaceImportedFiles(files: readonly FileRegistration[]): Promise<DocumentBatchResult> {
+    const imported = (await db.documents.toArray()).filter((record) => record.source !== 'new');
+    const removable = imported.filter((record) => record.draftUpdatedAt === null);
+    const preserved = imported.filter((record) => record.draftUpdatedAt !== null);
+    const removedIds = removable.map((record) => record.id);
+    if (removedIds.length > 0) await db.documents.bulkDelete(removedIds);
+    const records = await this.registerFiles(files);
+    return { records, removedIds, preservedIds: preserved.map((record) => record.id) };
+  },
+
+  async clearImportedDocuments(): Promise<Omit<DocumentBatchResult, 'records'>> {
+    const imported = (await db.documents.toArray()).filter((record) => record.source !== 'new');
+    const removable = imported.filter((record) => record.draftUpdatedAt === null);
+    const preserved = imported.filter((record) => record.draftUpdatedAt !== null);
+    const removedIds = removable.map((record) => record.id);
+    if (removedIds.length > 0) await db.documents.bulkDelete(removedIds);
+    return { removedIds, preservedIds: preserved.map((record) => record.id) };
   },
 
   async importUrl(url: string, content: string): Promise<LoadedDocument> {

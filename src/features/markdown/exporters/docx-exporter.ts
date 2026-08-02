@@ -66,6 +66,8 @@ const PAGE_WIDTH = 11_906;
 const PAGE_HEIGHT = 16_838;
 const PAGE_MARGIN = 1_134;
 const CONTENT_WIDTH = PAGE_WIDTH - PAGE_MARGIN * 2;
+const DOCUMENT_FONT = { ascii: 'Aptos', hAnsi: 'Aptos', eastAsia: 'Microsoft YaHei', cs: 'Aptos' } as const;
+const CODE_FONT = { ascii: 'Consolas', hAnsi: 'Consolas', eastAsia: 'Microsoft YaHei', cs: 'Consolas' } as const;
 
 function inlineChildren(nodes: PhrasingContent[] | undefined, style: RunStyle = {}): ParagraphChild[] {
   const children: ParagraphChild[] = [];
@@ -208,9 +210,10 @@ function codeParagraphs(text: string, language = ''): Paragraph[] {
   const runs = lines.map((line, index) => new TextRun({
     text: line || ' ',
     break: index > 0 ? 1 : undefined,
-    font: 'Consolas',
+    font: CODE_FONT,
     size: 18,
     color: '263238',
+    characterSpacing: 0,
   }));
   const output: Paragraph[] = [];
   if (language) output.push(new Paragraph({
@@ -219,6 +222,8 @@ function codeParagraphs(text: string, language = ''): Paragraph[] {
     keepNext: true,
   }));
   output.push(new Paragraph({
+    alignment: AlignmentType.LEFT,
+    autoSpaceEastAsianText: false,
     children: runs,
     spacing: { after: 160, line: 270 },
     keepLines: true,
@@ -380,7 +385,7 @@ export const docxExporter: MarkdownExporter = {
       styles: {
         default: {
           document: {
-            run: { font: 'Aptos', size: 22, color: '202833' },
+            run: { font: DOCUMENT_FONT, size: 22, color: '202833' },
             paragraph: { spacing: { line: 320, after: 120 } },
           },
         },

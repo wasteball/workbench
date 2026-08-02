@@ -8,8 +8,8 @@ import {
   Download,
   Image as ImageIcon,
   LoaderCircle,
-  Maximize2,
-  Scan,
+  Maximize,
+  Minimize,
   X,
   ZoomIn,
   ZoomOut,
@@ -129,8 +129,8 @@ function installPanZoom(
   controls.append(
     makeTool('缩小图表', ZoomOut, 'out', cleanups).button,
     makeTool('放大图表', ZoomIn, 'in', cleanups).button,
-    makeTool('适应画布', Scan, 'fit', cleanups).button,
-    makeTool('全屏查看', Maximize2, 'fullscreen', cleanups).button,
+    makeTool('适应画布', Minimize, 'fit', cleanups).button,
+    makeTool('全屏查看', Maximize, 'fullscreen', cleanups).button,
   );
 
   listen(controls, 'click', ((event: MouseEvent) => {
@@ -302,14 +302,16 @@ export async function enhanceMermaidDiagrams(body: HTMLElement, signal?: AbortSi
   const blocks = [...body.querySelectorAll<HTMLElement>('pre > code.language-mermaid')];
   for (const code of blocks) {
     const pre = code.parentElement;
-    if (!pre) continue;
+    if (!pre || pre.closest('.mermaid-figure')) continue;
     const source = code.textContent ?? '';
+    pre.dataset.mermaidPending = '';
     try {
       const svg = await renderMermaidSvg(source, dark ? 'dark' : 'default');
       if (signal?.aborted || !pre.isConnected) continue;
       cleanups.push(...mountDiagram(pre, source, svg, notify));
     } catch (error) {
       if (!signal?.aborted && pre.isConnected) {
+        delete pre.dataset.mermaidPending;
         pre.dataset.renderError = error instanceof Error ? `图表无法渲染：${error.message}` : '图表无法渲染，已保留源码。';
       }
     }

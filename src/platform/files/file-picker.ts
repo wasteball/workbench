@@ -170,7 +170,8 @@ export async function pickMarkdownDirectory(): Promise<PickedMarkdownFile[]> {
   const picker = (window as unknown as { showDirectoryPicker?: OpenDirectoryPicker }).showDirectoryPicker;
   if (!picker) return inputFiles(true);
   try {
-    return readDirectory(await picker());
+    const directory = await picker();
+    return readDirectory(directory, directory.name);
   } catch (error) {
     if (error instanceof DOMException && error.name === 'AbortError') return [];
     throw error;

@@ -41,4 +41,46 @@ describe('documentService', () => {
     expect(stored.map((record) => record?.sourceLabel)).toEqual(['notes/one.md', 'notes/two.markdown']);
     expect(stored.every((record) => record?.draftContent === null && record.baselineContent === null)).toBe(true);
   });
+
+  it('reuses the same record when a folder path is opened again', async () => {
+    const first = await documentService.registerFiles([{ name: 'one.md', relativePath: 'notes/one.md' }]);
+    const second = await documentService.registerFiles([{ name: 'one.md', relativePath: 'notes/one.md' }]);
+
+    expect(second[0]?.id).toBe(first[0]?.id);
+    expect(await db.documents.count()).toBe(1);
+  });
+
+  it('replaces clean imported files but keeps recovery drafts', async () => {
+    const previous = await documentService.registerFiles([
+      { name: 'clean.md', relativePath: 'old/clean.md' },
+      { name: 'changed.md', relativePath: 'old/changed.md' },
+    ]);
+    await documentService.updateDraft(previous[1]!.id, '# Changed', '# Original');
+
+    const result = await documentService.replaceImportedFiles([
+      { name: 'new.md', relativePath: 'new/new.md' },
+    ]);
+
+    expect(result.removedIds).toEqual([previous[0]!.id]);
+    expect(result.preservedIds).toEqual([previous[1]!.id]);
+    expect(await db.documents.get(previous[0]!.id)).toBeUndefined();
+    expect(await db.documents.get(previous[1]!.id)).toBeDefined();
+    expect(await db.documents.get(result.records[0]!.id)).toBeDefined();
+  });
+
+  it('clears imported records without deleting browser-only drafts or edited files', async () => {
+    const browserDraft = await documentService.create('# Browser draft');
+    const imported = await documentService.registerFiles([
+      { name: 'clean.md', relativePath: 'folder/clean.md' },
+      { name: 'changed.md', relativePath: 'folder/changed.md' },
+    ]);
+    await documentService.updateDraft(imported[1]!.id, '# Changed', '# Original');
+
+    const result = await documentService.clearImportedDocuments();
+
+    expect(result.removedIds).toEqual([imported[0]!.id]);
+    expect(result.preservedIds).toEqual([imported[1]!.id]);
+    expect(await db.documents.get(browserDraft.id)).toBeDefined();
+    expect(await db.documents.get(imported[1]!.id)).toBeDefined();
+  });
 });

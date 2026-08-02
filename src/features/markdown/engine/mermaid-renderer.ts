@@ -14,6 +14,9 @@ export interface RasterizedSvg extends SvgDimensions {
 }
 
 let renderQueue: Promise<unknown> = Promise.resolve();
+const renderCache = new Map<string, Promise<string>>();
+const MAX_CACHED_DIAGRAMS = 80;
+const MERMAID_FONT_FAMILY = '"Segoe UI", "Microsoft YaHei", "PingFang SC", Arial, sans-serif';
 
 function fixEncodedEntities(svg: string): string {
   return svg.replace(/&amp;(gt|lt|amp|quot|apos|nbsp|#\d+|#x[0-9a-f]+);/gi, '&$1;');
@@ -45,27 +48,75 @@ function clearTemporaryNode(id: string) {
   if (direct?.parentElement === document.body) direct.remove();
 }
 
+function isolatedRenderHost(): HTMLDivElement {
+  const host = document.createElement('div');
+  host.setAttribute('aria-hidden', 'true');
+  host.style.cssText = 'position:fixed;left:-100000px;top:0;width:1200px;height:1px;overflow:hidden;opacity:0;pointer-events:none;z-index:-2147483648;contain:layout style paint';
+  document.body.append(host);
+  return host;
+}
+
+function padSvgViewBox(markup: string): string {
+  const parsed = new DOMParser().parseFromString(markup, 'image/svg+xml');
+  const svg = parsed.documentElement;
+  if (svg.tagName.toLocaleLowerCase() !== 'svg') return markup;
+  const viewBox = svg.getAttribute('viewBox')?.trim().split(/[\s,]+/).map(Number);
+  if (viewBox?.length !== 4 || viewBox.some((value) => !Number.isFinite(value)) || viewBox[2]! <= 0 || viewBox[3]! <= 0) return markup;
+  const padding = Math.max(8, Math.min(24, Math.min(viewBox[2]!, viewBox[3]!) * 0.015));
+  svg.setAttribute('viewBox', `${viewBox[0]! - padding} ${viewBox[1]! - padding} ${viewBox[2]! + padding * 2} ${viewBox[3]! + padding * 2}`);
+  return new XMLSerializer().serializeToString(svg);
+}
+
+function cacheRender(key: string, create: () => Promise<string>): Promise<string> {
+  const cached = renderCache.get(key);
+  if (cached) {
+    renderCache.delete(key);
+    renderCache.set(key, cached);
+    return cached;
+  }
+  const pending = create();
+  renderCache.set(key, pending);
+  if (renderCache.size > MAX_CACHED_DIAGRAMS) {
+    const oldest = renderCache.keys().next().value;
+    if (oldest !== undefined) renderCache.delete(oldest);
+  }
+  void pending.catch(() => {
+    if (renderCache.get(key) === pending) renderCache.delete(key);
+  });
+  return pending;
+}
+
 export async function renderMermaidSvg(source: string, theme: MermaidTheme = 'default'): Promise<string> {
-  const id = `workbench-mermaid-${nanoid(8)}`;
-  const render = async () => {
-    mermaid.initialize({
-      startOnLoad: false,
-      securityLevel: 'strict',
-      suppressErrorRendering: true,
-      htmlLabels: false,
-      flowchart: { htmlLabels: false, useMaxWidth: false },
-      theme,
-    });
-    try {
-      const result = await mermaid.render(id, prepareMermaidSource(source));
-      return String(DOMPurify.sanitize(fixEncodedEntities(result.svg), { USE_PROFILES: { svg: true, svgFilters: true } }));
-    } finally {
-      clearTemporaryNode(id);
-    }
-  };
-  const result = renderQueue.then(render, render);
-  renderQueue = result.then(() => undefined, () => undefined);
-  return result;
+  const prepared = prepareMermaidSource(source);
+  const cacheKey = `${theme}\u0000${prepared}`;
+  return cacheRender(cacheKey, () => {
+    const id = `workbench-mermaid-${nanoid(8)}`;
+    const render = async () => {
+      const host = isolatedRenderHost();
+      mermaid.initialize({
+        startOnLoad: false,
+        securityLevel: 'strict',
+        suppressErrorRendering: true,
+        htmlLabels: false,
+        fontFamily: MERMAID_FONT_FAMILY,
+        themeVariables: { fontFamily: MERMAID_FONT_FAMILY },
+        flowchart: { htmlLabels: false, useMaxWidth: false },
+        mindmap: { padding: 18, maxNodeWidth: 260 },
+        theme,
+      });
+      try {
+        const result = await mermaid.render(id, prepared, host);
+        const safe = String(DOMPurify.sanitize(fixEncodedEntities(result.svg), { USE_PROFILES: { svg: true, svgFilters: true } }));
+        return padSvgViewBox(safe);
+      } finally {
+        host.remove();
+        clearTemporaryNode(id);
+      }
+    };
+    const result = renderQueue.then(render, render);
+    renderQueue = result.then(() => undefined, () => undefined);
+    return result;
+  });
 }
 
 function numericDimension(value: string | null): number {

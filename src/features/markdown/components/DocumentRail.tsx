@@ -14,7 +14,7 @@ interface FolderNode {
   documents: DocumentRecord[];
 }
 
-const FILE_RENDER_BATCH = 250;
+const FILE_RENDER_BATCH = 150;
 
 function documentPath(document: DocumentRecord): string[] {
   if (document.source !== 'file') return [document.title];
@@ -107,6 +107,8 @@ export function DocumentRail({
   activeHeadingId,
   onOpen,
   onRemove,
+  onClear,
+  busy,
   onHeading,
 }: {
   documents: DocumentRecord[];
@@ -115,6 +117,8 @@ export function DocumentRail({
   activeHeadingId: string;
   onOpen: (document: DocumentRecord) => void;
   onRemove: (document: DocumentRecord) => void;
+  onClear: () => void;
+  busy: boolean;
   onHeading: (heading: MarkdownHeading) => void;
 }) {
   const [filesOpen, setFilesOpen] = useState(true);
@@ -140,12 +144,15 @@ export function DocumentRail({
   return (
     <aside className="document-rail">
       <section className={`document-rail__section document-rail__section--files ${filesOpen ? '' : 'document-rail__section--collapsed'}`}>
-        <button aria-expanded={filesOpen} className="document-rail__section-heading" onClick={() => setFilesOpen((value) => !value)} type="button">
-          {filesOpen ? <ChevronDown aria-hidden="true" size={14} /> : <ChevronRight aria-hidden="true" size={14} />}
-          <FolderTree aria-hidden="true" size={14} />
-          <strong>文件</strong>
-          <span>{documents.length}</span>
-        </button>
+        <div className="document-rail__section-header">
+          <button aria-expanded={filesOpen} className="document-rail__section-heading" onClick={() => setFilesOpen((value) => !value)} type="button">
+            {filesOpen ? <ChevronDown aria-hidden="true" size={14} /> : <ChevronRight aria-hidden="true" size={14} />}
+            <FolderTree aria-hidden="true" size={14} />
+            <strong>文件</strong>
+            <span>{documents.length}</span>
+          </button>
+          {documents.some((document) => document.source !== 'new') ? <IconButton disabled={busy} icon={Trash2} label={busy ? '正在整理文件' : '清空已打开文件'} onClick={onClear} /> : null}
+        </div>
         {filesOpen ? <>
           {documents.length > 0 ? <label className="document-search">
             <Search aria-hidden="true" size={14} />

@@ -145,6 +145,7 @@ export function MarkdownWorkspace({ route, navigate }: PageProps) {
   const [activeHeadingId, setActiveHeadingId] = useState('');
   const [status, setStatus] = useState('');
   const [exporting, setExporting] = useState(false);
+  const [documentsBusy, setDocumentsBusy] = useState(false);
   const [toast, setToast] = useState<{ id: number; message: string; kind: 'info' | 'success' | 'error' } | null>(null);
   const editorView = useRef<EditorView | null>(null);
   const markdownPreview = useRef<MarkdownPreviewHandle>(null);
@@ -400,23 +401,46 @@ export function MarkdownWorkspace({ route, navigate }: PageProps) {
     return () => window.clearTimeout(timer);
   }, [active, baseline, content, hasChanges, setDestination, title]);
 
-  const importFiles = async (pickedFiles: PickedMarkdownFile[]) => {
-    if (pickedFiles.length === 0) return;
-    setStatus(pickedFiles.length === 1 ? '正在打开文件…' : `正在整理 ${pickedFiles.length} 个文件…`);
-    const records = await documentService.registerFiles(pickedFiles);
-    records.forEach((record, index) => {
-      const picked = pickedFiles[index];
-      if (picked) sessionFiles.current.set(record.id, picked);
-    });
-    await refreshDocuments();
-    const first = records[0];
-    if (first) {
-      await openRecord(first);
-      navigate('markdown', new URLSearchParams({ document: first.id }));
+  const importFiles = async (selectedFiles: PickedMarkdownFile[], replaceCurrentFiles = false) => {
+    if (selectedFiles.length === 0) return;
+    const uniqueFiles = [...new Map(selectedFiles.map((file) => [
+      file.relativePath.replace(/\\/g, '/').toLocaleLowerCase(),
+      file,
+    ])).values()];
+    setDocumentsBusy(true);
+    setStatus(uniqueFiles.length === 1 ? '正在打开文件…' : `正在整理 ${uniqueFiles.length} 个文件…`);
+    try {
+      if (replaceCurrentFiles && active && !active.needsSource && hasChanges) {
+        await documentService.updateDraft(active.record.id, contentRef.current, baseline, title);
+      }
+      const batch = replaceCurrentFiles
+        ? await documentService.replaceImportedFiles(uniqueFiles)
+        : { records: await documentService.registerFiles(uniqueFiles), removedIds: [], preservedIds: [] };
+      const { records, removedIds, preservedIds } = batch;
+      removedIds.forEach((id) => {
+        sessionDocuments.current.delete(id);
+        sessionFiles.current.delete(id);
+        documentHistory.current.delete(id);
+      });
+      records.forEach((record, index) => {
+        const picked = uniqueFiles[index];
+        if (picked) sessionFiles.current.set(record.id, picked);
+      });
+      await refreshDocuments();
+      const first = records[0];
+      if (first) {
+        await openRecord(first);
+        navigate('markdown', new URLSearchParams({ document: first.id }));
+      }
+      const preservedCopy = preservedIds.length > 0 ? `；另保留 ${preservedIds.length} 份有未保存改动的文档` : '';
+      setStatus(uniqueFiles.length >= 2_000
+        ? '已打开前 2,000 个 Markdown 文件，其余文件未载入。'
+        : replaceCurrentFiles
+          ? `当前文件夹共 ${uniqueFiles.length} 个 Markdown 文件${preservedCopy}，文件会在点开时读取。`
+          : `已打开 ${uniqueFiles.length} 个文件，其他文件会在点开时读取。`);
+    } finally {
+      setDocumentsBusy(false);
     }
-    setStatus(pickedFiles.length >= 2_000
-      ? '已打开前 2,000 个 Markdown 文件，其余文件未载入。'
-      : `已打开 ${pickedFiles.length} 个文件，其他文件会在点开时读取。`);
   };
 
   const importUrl = async (value: string) => {
@@ -443,7 +467,7 @@ export function MarkdownWorkspace({ route, navigate }: PageProps) {
     openMenu.current?.removeAttribute('open');
     try {
       const picked = await pickMarkdownDirectory();
-      if (picked.length > 0) await importFiles(picked);
+      if (picked.length > 0) await importFiles(picked, true);
       else setStatus('所选文件夹中没有 Markdown 文档。');
     } catch (error) {
       setStatus(error instanceof Error ? error.message : '无法打开所选文件夹。');
@@ -646,6 +670,47 @@ export function MarkdownWorkspace({ route, navigate }: PageProps) {
       navigate('markdown');
     }
     await refreshDocuments();
+  };
+
+  const clearImportedDocuments = async () => {
+    if (documentsBusy) {
+      notify('文件夹仍在打开，请稍候再清空。');
+      return;
+    }
+    if (!documents.some((record) => record.source !== 'new')) return;
+    markdownPreview.current?.commitActiveEdit();
+    if (!window.confirm('清空已打开的文件列表？\n\n这只会从 Workbench 中移除记录，不会删除电脑里的原文件。有未保存改动的文档会继续保留。')) return;
+    setDocumentsBusy(true);
+    setStatus('正在清理文件列表…');
+    try {
+      if (active && !active.needsSource && (contentRef.current !== baseline || title !== active.record.title)) {
+        await documentService.updateDraft(active.record.id, contentRef.current, baseline, title);
+      }
+      const { removedIds, preservedIds } = await documentService.clearImportedDocuments();
+      removedIds.forEach((id) => {
+        sessionDocuments.current.delete(id);
+        sessionFiles.current.delete(id);
+        documentHistory.current.delete(id);
+      });
+      const activeStillExists = active ? await documentService.read(active.record.id) : undefined;
+      if (active && !activeStillExists) {
+        setActive(null);
+        setContent('');
+        contentRef.current = '';
+        setBaseline('');
+        setRendered(EMPTY_RENDER);
+        setDestination({ kind: 'browser-draft', label: 'Markdown 工作区', detail: '等待打开文档' });
+        navigate('markdown');
+      }
+      await refreshDocuments();
+      const message = preservedIds.length > 0
+        ? `已清空 ${removedIds.length} 个文件，保留 ${preservedIds.length} 份有未保存改动的文档。`
+        : `已清空 ${removedIds.length} 个文件，电脑里的原文件没有删除。`;
+      setStatus(message);
+      notify(message, 'success');
+    } finally {
+      setDocumentsBusy(false);
+    }
   };
 
   const currentPreviewSelection = useCallback(() => {
@@ -1043,8 +1108,10 @@ export function MarkdownWorkspace({ route, navigate }: PageProps) {
         <DocumentRail
           activeHeadingId={activeHeadingId}
           activeId={active?.record.id}
+          busy={documentsBusy}
           documents={documents}
           headings={active && !active.needsSource && mode !== 'source' ? rendered.headings : []}
+          onClear={() => void clearImportedDocuments()}
           onHeading={scrollToHeading}
           onOpen={(document) => void openRecord(document)}
           onRemove={(document) => void removeDocument(document)}

@@ -1,5 +1,6 @@
-import { forwardRef, memo, useCallback, useEffect, useImperativeHandle, useRef, useState, type CSSProperties } from 'react';
+import { forwardRef, memo, useCallback, useEffect, useImperativeHandle, useLayoutEffect, useRef, useState, type CSSProperties } from 'react';
 import { createPortal } from 'react-dom';
+import { diffWordsWithSpace } from 'diff';
 import {
   AlignCenter,
   AlignLeft,
@@ -187,6 +188,21 @@ function findReviewTarget(body: HTMLElement, change: ReviewChange): HTMLElement 
   return blocks.find((block) => Number(block.dataset.sourceFrom) >= change.currentFrom) ?? blocks.at(-1) ?? null;
 }
 
+function preciseReviewDiff(change: ReviewChange): HTMLElement | null {
+  if (!change.before || !change.after) return null;
+  const parts = diffWordsWithSpace(change.before, change.after, { timeout: 80 });
+  if (!parts?.some((part) => part.added || part.removed)) return null;
+  const detail = document.createElement('div');
+  detail.className = 'inline-review-card__detail';
+  detail.setAttribute('aria-label', '具体改动');
+  for (const part of parts) {
+    const element = document.createElement(part.added ? 'ins' : part.removed ? 'del' : 'span');
+    element.textContent = part.value;
+    detail.append(element);
+  }
+  return detail;
+}
+
 function placeCaret(element: HTMLElement, x?: number, y?: number) {
   element.focus();
   try {
@@ -251,6 +267,8 @@ export const MarkdownPreview = memo(forwardRef<MarkdownPreviewHandle, MarkdownPr
   const markdownRef = useRef(markdown);
   const blocksRef = useRef(blocks);
   const onMarkdownChangeRef = useRef(onMarkdownChange);
+  const onNotifyRef = useRef(onNotify);
+  const onTaskToggleRef = useRef(onTaskToggle);
   const [sourceEditor, setSourceEditor] = useState<SourceEditorState | null>(null);
   const [blockTools, setBlockTools] = useState<BlockToolsState | null>(null);
   const [blockMenu, setBlockMenu] = useState<BlockToolsState | null>(null);
@@ -265,6 +283,8 @@ export const MarkdownPreview = memo(forwardRef<MarkdownPreviewHandle, MarkdownPr
   markdownRef.current = markdown;
   blocksRef.current = blocks;
   onMarkdownChangeRef.current = onMarkdownChange;
+  onNotifyRef.current = onNotify;
+  onTaskToggleRef.current = onTaskToggle;
   selectionToolsRef.current = selectionTools;
 
   const searchQuery = search?.query ?? '';
@@ -412,28 +432,28 @@ export const MarkdownPreview = memo(forwardRef<MarkdownPreviewHandle, MarkdownPr
     });
   }, [finishCellEdit, finishRichEdit]);
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     const body = bodyRef.current;
     if (!body) return;
     let active = true;
     const controller = new AbortController();
     const cleanups: Array<() => void> = [];
     const enhance = async () => {
-      const diagramCleanups = await enhanceMermaidDiagrams(body, controller.signal, onNotify);
+      const diagramCleanups = await enhanceMermaidDiagrams(body, controller.signal, (message, kind) => onNotifyRef.current?.(message, kind));
       if (!active) {
         diagramCleanups.forEach((cleanup) => cleanup());
         return;
       }
       cleanups.push(...diagramCleanups);
 
-      if (onTaskToggle) {
+      if (onTaskToggleRef.current) {
         body.querySelectorAll<HTMLInputElement>('li.task-list-item > input[type="checkbox"]').forEach((checkbox, taskIndex) => {
           checkbox.removeAttribute('disabled');
           checkbox.classList.add('markdown-task-checkbox');
           const updateLabel = () => checkbox.setAttribute('aria-label', checkbox.checked ? '标记任务为未完成' : '标记任务为已完成');
           const handleChange = () => {
             updateLabel();
-            onTaskToggle(taskIndex, checkbox.checked);
+            onTaskToggleRef.current?.(taskIndex, checkbox.checked);
           };
           updateLabel();
           checkbox.addEventListener('change', handleChange);
@@ -452,9 +472,9 @@ export const MarkdownPreview = memo(forwardRef<MarkdownPreviewHandle, MarkdownPr
           const source = pre.querySelector('code')?.textContent ?? '';
           void navigator.clipboard.writeText(source).then(() => {
             button.textContent = '已复制';
-            onNotify?.('代码已复制到剪贴板。', 'success');
+            onNotifyRef.current?.('代码已复制到剪贴板。', 'success');
             window.setTimeout(() => { button.textContent = '复制'; }, 1_200);
-          }, () => onNotify?.('浏览器未允许复制代码。', 'error'));
+          }, () => onNotifyRef.current?.('浏览器未允许复制代码。', 'error'));
         };
         button.addEventListener('click', handleCopy);
         pre.append(button);
@@ -471,7 +491,7 @@ export const MarkdownPreview = memo(forwardRef<MarkdownPreviewHandle, MarkdownPr
       controller.abort();
       cleanups.forEach((cleanup) => cleanup());
     };
-  }, [html, onNotify, onTaskToggle]);
+  }, [html]);
 
   useEffect(() => {
     const body = bodyRef.current;
@@ -560,7 +580,7 @@ export const MarkdownPreview = memo(forwardRef<MarkdownPreviewHandle, MarkdownPr
       card.dataset.reviewIndex = String(index);
       const header = document.createElement('header');
       const badge = change.kind === 'added' ? '新增' : change.kind === 'removed' ? '删除' : '原来';
-      const context = change.kind === 'added' ? '原来没有这一块，下面是现在的内容' : change.kind === 'removed' ? '这里原来的内容已被删除' : '下面是现在的内容';
+      const context = change.kind === 'added' ? '原来没有这一块，卡片下方是现在的内容' : change.kind === 'removed' ? '这里原来的内容已被删除' : '这是保存前的内容，卡片下方是现在的内容';
       header.innerHTML = `<strong>${badge}</strong><span>${context}</span>`;
       card.append(header);
       if (change.before) {
@@ -569,6 +589,8 @@ export const MarkdownPreview = memo(forwardRef<MarkdownPreviewHandle, MarkdownPr
         ghost.innerHTML = (await renderMarkdown(change.before)).html;
         card.append(ghost);
       }
+      const detail = preciseReviewDiff(change);
+      if (detail) card.append(detail);
       const actions = document.createElement('footer');
       const revert = document.createElement('button');
       revert.type = 'button';
@@ -769,8 +791,13 @@ export const MarkdownPreview = memo(forwardRef<MarkdownPreviewHandle, MarkdownPr
     const handleFocusOut = (event: FocusEvent) => {
       const next = event.relatedTarget as HTMLElement | null;
       if (next?.closest('.rich-selection-toolbar, .rich-link-editor, .markdown-block-tools, .markdown-insert-menu, .markdown-table-tools, .markdown-table-menu, .block-source-editor')) return;
-      if (activeCell.current && !activeCell.current.element.contains(next)) finishCellEdit(true);
-      if (activeRich.current && !activeRich.current.element.contains(next)) finishRichEdit(true);
+      queueMicrotask(() => {
+        const focused = document.activeElement;
+        const cell = activeCell.current;
+        const rich = activeRich.current;
+        if (cell?.element.isConnected && !cell.element.contains(focused)) finishCellEdit(true);
+        if (rich?.element.isConnected && !rich.element.contains(focused)) finishRichEdit(true);
+      });
     };
 
     body.addEventListener('mouseover', handleMouseOver);
@@ -805,7 +832,7 @@ export const MarkdownPreview = memo(forwardRef<MarkdownPreviewHandle, MarkdownPr
     return () => document.removeEventListener('selectionchange', handleSelectionChange);
   }, [editable, linkEditor]);
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     const active = activeCell.current;
     if (active) {
       const nextBlock = blocksRef.current.find((block) => block.index === active.block.index);
@@ -839,13 +866,45 @@ export const MarkdownPreview = memo(forwardRef<MarkdownPreviewHandle, MarkdownPr
       setTableMenu(null);
       setTableTools(null);
     }
-    activeRich.current = null;
-    setSourceEditor(null);
+
+    const rich = activeRich.current;
+    if (rich) {
+      const nextBlock = blocksRef.current.find((block) => block.index === rich.block.index);
+      const anchor = bodyRef.current?.querySelector<HTMLElement>(`.markdown-block[data-block-index="${rich.block.index}"]`);
+      if (nextBlock && anchor) {
+        const element = rich.pending ? document.createElement('div') : anchor;
+        element.innerHTML = rich.element.innerHTML;
+        element.setAttribute('contenteditable', 'true');
+        element.classList.add('markdown-block--editing');
+        if (rich.pending) {
+          element.classList.add('markdown-block', 'markdown-block--pending');
+          element.dataset.blockType = 'paragraph';
+          anchor.insertAdjacentElement('afterend', element);
+        }
+        activeRich.current = { ...rich, element, block: nextBlock };
+        placeCaret(element);
+      } else {
+        activeRich.current = null;
+      }
+    }
+
+    if (sourceEditor) {
+      const nextBlock = blocksRef.current.find((block) => block.index === sourceEditor.block.index);
+      const element = bodyRef.current?.querySelector<HTMLElement>(`.markdown-block[data-block-index="${sourceEditor.block.index}"]`);
+      if (nextBlock && element) {
+        element.classList.add('markdown-block--source-editing');
+        if (element !== sourceEditor.element || nextBlock !== sourceEditor.block) {
+          setSourceEditor({ ...sourceEditor, element, block: nextBlock });
+        }
+      } else {
+        setSourceEditor(null);
+      }
+    }
     setSelectionTools(null);
     setLinkEditor(null);
     setBlockMenu(null);
     setInsertMenu(null);
-  }, [html]);
+  }, [html, sourceEditor]);
 
   useEffect(() => {
     const pending = pendingCellFocus.current;
