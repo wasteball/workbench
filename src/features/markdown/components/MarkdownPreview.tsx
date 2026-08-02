@@ -1,20 +1,42 @@
 import { forwardRef, memo, useCallback, useEffect, useImperativeHandle, useRef, useState, type CSSProperties } from 'react';
 import { createPortal } from 'react-dom';
 import {
+  AlignCenter,
+  AlignLeft,
+  AlignRight,
   ArrowDown,
+  ArrowLeft,
+  ArrowRight,
   ArrowUp,
   Bold,
+  Braces,
   Check,
   Code2,
+  Columns3,
   Copy,
   GripVertical,
+  Heading2,
+  Heading3,
+  Image as ImageIcon,
   Italic,
   Link,
+  List,
+  ListChecks,
+  ListOrdered,
+  MessageSquareText,
+  Minus,
+  Pilcrow,
   Plus,
+  Quote,
   RemoveFormatting,
+  Rows3,
+  Sigma,
   Strikethrough,
+  Table2,
   Trash2,
+  Workflow,
   X,
+  type LucideIcon,
 } from 'lucide-react';
 
 import { useSettings } from '@/app/settings-context';
@@ -26,11 +48,17 @@ import {
   canEditBlockRichly,
   duplicateMarkdownBlock,
   insertMarkdownAfterBlock,
+  markdownForInsertedBlock,
   markdownFromEditableBlock,
   moveMarkdownBlock,
   replaceMarkdownBlock,
   sourceLabelForBlock,
+  transformMarkdownBlock,
   updateMarkdownTableCell,
+  updateMarkdownTableStructure,
+  type MarkdownBlockInsertKind,
+  type MarkdownBlockTransformKind,
+  type MarkdownTableOperation,
 } from '@/features/markdown/engine/rich-edit';
 import { IconButton } from '@/shared/ui/IconButton';
 import 'katex/dist/katex.min.css';
@@ -42,6 +70,7 @@ interface MarkdownPreviewProps {
   blocks: MarkdownBlock[];
   editable?: boolean;
   onMarkdownChange?: (markdown: string) => void;
+  onNotify?: (message: string, kind?: 'info' | 'success' | 'error') => void;
   onTaskToggle?: (taskIndex: number, checked: boolean) => void;
   search?: {
     query: string;
@@ -96,9 +125,47 @@ interface BlockToolsState extends FloatingPosition {
   index: number;
 }
 
+interface TableToolsState extends FloatingPosition {
+  index: number;
+  row: number;
+  column: number;
+}
+
+interface TableMenuState extends TableToolsState {
+  kind: 'row' | 'column';
+}
+
+const INSERT_OPTIONS: Array<{ kind: MarkdownBlockInsertKind; label: string; icon: LucideIcon }> = [
+  { kind: 'paragraph', label: '正文段落', icon: Pilcrow },
+  { kind: 'heading-2', label: '大标题', icon: Heading2 },
+  { kind: 'heading-3', label: '小标题', icon: Heading3 },
+  { kind: 'bullet-list', label: '无序列表', icon: List },
+  { kind: 'numbered-list', label: '有序列表', icon: ListOrdered },
+  { kind: 'task-list', label: '待办清单', icon: ListChecks },
+  { kind: 'table', label: '表格', icon: Table2 },
+  { kind: 'blockquote', label: '引用', icon: Quote },
+  { kind: 'callout', label: '提示框', icon: MessageSquareText },
+  { kind: 'divider', label: '分割线', icon: Minus },
+  { kind: 'code', label: '代码块', icon: Braces },
+  { kind: 'mermaid', label: '流程图', icon: Workflow },
+  { kind: 'math', label: '数学公式', icon: Sigma },
+  { kind: 'image', label: '图片', icon: ImageIcon },
+];
+
+const TRANSFORM_OPTIONS: Array<{ kind: MarkdownBlockTransformKind; label: string; icon: LucideIcon }> = [
+  { kind: 'paragraph', label: '正文', icon: Pilcrow },
+  { kind: 'heading-2', label: '大标题', icon: Heading2 },
+  { kind: 'heading-3', label: '小标题', icon: Heading3 },
+  { kind: 'bullet-list', label: '无序列表', icon: List },
+  { kind: 'numbered-list', label: '有序列表', icon: ListOrdered },
+  { kind: 'task-list', label: '待办清单', icon: ListChecks },
+  { kind: 'blockquote', label: '引用', icon: Quote },
+  { kind: 'code', label: '代码块', icon: Braces },
+];
+
 const SEARCH_HIGHLIGHT = 'workbench-find-match';
 const CURRENT_SEARCH_HIGHLIGHT = 'workbench-find-current';
-const SEARCH_SKIP = 'button, .mermaid-figure__source, .inline-review-card, .block-source-editor, .markdown-block-tools, .rich-selection-toolbar';
+const SEARCH_SKIP = 'button, .mermaid-figure__source, .inline-review-card, .block-source-editor, .markdown-block-tools, .rich-selection-toolbar, .markdown-insert-menu, .markdown-table-tools, .markdown-table-menu';
 
 const PreviewBody = memo(forwardRef<HTMLDivElement, { html: string }>(function PreviewBody({ html }, ref) {
   return <div className="markdown-preview__body" dangerouslySetInnerHTML={{ __html: html }} ref={ref} />;
@@ -169,6 +236,7 @@ export const MarkdownPreview = memo(forwardRef<MarkdownPreviewHandle, MarkdownPr
   blocks,
   editable = false,
   onMarkdownChange,
+  onNotify,
   onTaskToggle,
   search,
   review,
@@ -178,6 +246,7 @@ export const MarkdownPreview = memo(forwardRef<MarkdownPreviewHandle, MarkdownPr
   const activeRich = useRef<ActiveRichBlock | null>(null);
   const activeCell = useRef<ActiveTableCell | null>(null);
   const savedRange = useRef<Range | null>(null);
+  const pendingCellFocus = useRef<{ index: number; row: number; column: number } | null>(null);
   const selectionToolsRef = useRef<FloatingPosition | null>(null);
   const markdownRef = useRef(markdown);
   const blocksRef = useRef(blocks);
@@ -185,6 +254,11 @@ export const MarkdownPreview = memo(forwardRef<MarkdownPreviewHandle, MarkdownPr
   const [sourceEditor, setSourceEditor] = useState<SourceEditorState | null>(null);
   const [blockTools, setBlockTools] = useState<BlockToolsState | null>(null);
   const [blockMenu, setBlockMenu] = useState<BlockToolsState | null>(null);
+  const [insertMenu, setInsertMenu] = useState<BlockToolsState | null>(null);
+  const [tableTools, setTableTools] = useState<TableToolsState | null>(null);
+  const [tableMenu, setTableMenu] = useState<TableMenuState | null>(null);
+  const tableMenuRef = useRef<TableMenuState | null>(null);
+  tableMenuRef.current = tableMenu;
   const [selectionTools, setSelectionTools] = useState<FloatingPosition | null>(null);
   const [linkEditor, setLinkEditor] = useState<{ position: FloatingPosition; value: string } | null>(null);
 
@@ -201,6 +275,8 @@ export const MarkdownPreview = memo(forwardRef<MarkdownPreviewHandle, MarkdownPr
     const active = activeCell.current;
     if (!active) return;
     activeCell.current = null;
+    setTableTools(null);
+    setTableMenu(null);
     const value = (active.element.textContent ?? '').replace(/\s*\n+\s*/g, '<br>').trim();
     active.element.removeAttribute('contenteditable');
     active.element.classList.remove('markdown-table-cell--editing');
@@ -211,7 +287,9 @@ export const MarkdownPreview = memo(forwardRef<MarkdownPreviewHandle, MarkdownPr
     if (value === active.initialValue) return;
     const updatedTable = updateMarkdownTableCell(active.block.raw, active.row, active.column, value);
     if (!updatedTable) return;
-    onMarkdownChangeRef.current?.(replaceMarkdownBlock(markdownRef.current, active.block, updatedTable));
+    const next = replaceMarkdownBlock(markdownRef.current, active.block, updatedTable);
+    markdownRef.current = next;
+    onMarkdownChangeRef.current?.(next);
   }, []);
 
   const finishRichEdit = useCallback((commit: boolean) => {
@@ -233,11 +311,17 @@ export const MarkdownPreview = memo(forwardRef<MarkdownPreviewHandle, MarkdownPr
     const nextBlock = markdownFromEditableBlock(active.element);
     if (active.pending) {
       active.element.remove();
-      if (nextBlock.trim()) onMarkdownChangeRef.current?.(insertMarkdownAfterBlock(markdownRef.current, active.block, nextBlock));
+      if (nextBlock.trim()) {
+        const next = insertMarkdownAfterBlock(markdownRef.current, active.block, nextBlock);
+        markdownRef.current = next;
+        onMarkdownChangeRef.current?.(next);
+      }
       return;
     }
     if (active.element.innerHTML === active.initialHtml) return;
-    onMarkdownChangeRef.current?.(replaceMarkdownBlock(markdownRef.current, active.block, nextBlock));
+    const next = replaceMarkdownBlock(markdownRef.current, active.block, nextBlock);
+    markdownRef.current = next;
+    onMarkdownChangeRef.current?.(next);
   }, []);
 
   const finishSourceEdit = useCallback((commit: boolean) => {
@@ -245,7 +329,10 @@ export const MarkdownPreview = memo(forwardRef<MarkdownPreviewHandle, MarkdownPr
     sourceEditor.element.classList.remove('markdown-block--source-editing');
     if (commit) {
       const next = replaceMarkdownBlock(markdownRef.current, sourceEditor.block, sourceEditor.value);
-      if (next !== markdownRef.current) onMarkdownChangeRef.current?.(next);
+      if (next !== markdownRef.current) {
+        markdownRef.current = next;
+        onMarkdownChangeRef.current?.(next);
+      }
     }
     setSourceEditor(null);
   }, [sourceEditor]);
@@ -270,6 +357,8 @@ export const MarkdownPreview = memo(forwardRef<MarkdownPreviewHandle, MarkdownPr
     finishCellEdit(true);
     finishRichEdit(true);
     setSourceEditor(null);
+    setInsertMenu(null);
+    setBlockMenu(null);
     element.setAttribute('contenteditable', 'true');
     element.classList.add('markdown-block--editing');
     activeRich.current = { element, block, initialHtml: element.innerHTML, pending: false };
@@ -280,6 +369,8 @@ export const MarkdownPreview = memo(forwardRef<MarkdownPreviewHandle, MarkdownPr
     finishCellEdit(true);
     finishRichEdit(true);
     setSourceEditor(null);
+    setInsertMenu(null);
+    setBlockMenu(null);
     const current = bodyRef.current?.querySelector<HTMLElement>(`.markdown-block[data-block-index="${block.index}"]`);
     if (!current) return;
     const pending = document.createElement('div');
@@ -297,6 +388,8 @@ export const MarkdownPreview = memo(forwardRef<MarkdownPreviewHandle, MarkdownPr
     finishRichEdit(true);
     finishCellEdit(true);
     setSourceEditor(null);
+    setInsertMenu(null);
+    setBlockMenu(null);
     const rowElement = cell.parentElement as HTMLTableRowElement | null;
     const table = cell.closest('table');
     if (!rowElement || !table) return;
@@ -309,6 +402,14 @@ export const MarkdownPreview = memo(forwardRef<MarkdownPreviewHandle, MarkdownPr
     cell.setAttribute('contenteditable', 'true');
     cell.classList.add('markdown-table-cell--editing');
     placeCaret(cell);
+    const rect = cell.getBoundingClientRect();
+    setTableTools({
+      index: block.index,
+      row,
+      column: cell.cellIndex,
+      top: Math.max(6, rect.top - 38),
+      left: Math.max(6, Math.min(window.innerWidth - 82, rect.left + rect.width / 2 - 36)),
+    });
   }, [finishCellEdit, finishRichEdit]);
 
   useEffect(() => {
@@ -318,7 +419,7 @@ export const MarkdownPreview = memo(forwardRef<MarkdownPreviewHandle, MarkdownPr
     const controller = new AbortController();
     const cleanups: Array<() => void> = [];
     const enhance = async () => {
-      const diagramCleanups = await enhanceMermaidDiagrams(body, controller.signal);
+      const diagramCleanups = await enhanceMermaidDiagrams(body, controller.signal, onNotify);
       if (!active) {
         diagramCleanups.forEach((cleanup) => cleanup());
         return;
@@ -351,8 +452,9 @@ export const MarkdownPreview = memo(forwardRef<MarkdownPreviewHandle, MarkdownPr
           const source = pre.querySelector('code')?.textContent ?? '';
           void navigator.clipboard.writeText(source).then(() => {
             button.textContent = '已复制';
+            onNotify?.('代码已复制到剪贴板。', 'success');
             window.setTimeout(() => { button.textContent = '复制'; }, 1_200);
-          });
+          }, () => onNotify?.('浏览器未允许复制代码。', 'error'));
         };
         button.addEventListener('click', handleCopy);
         pre.append(button);
@@ -369,7 +471,7 @@ export const MarkdownPreview = memo(forwardRef<MarkdownPreviewHandle, MarkdownPr
       controller.abort();
       cleanups.forEach((cleanup) => cleanup());
     };
-  }, [html, onTaskToggle]);
+  }, [html, onNotify, onTaskToggle]);
 
   useEffect(() => {
     const body = bodyRef.current;
@@ -525,7 +627,7 @@ export const MarkdownPreview = memo(forwardRef<MarkdownPreviewHandle, MarkdownPr
 
     const handleMouseOver = (event: MouseEvent) => {
       const target = event.target as HTMLElement;
-      if (target.closest('.block-source-editor, .rich-selection-toolbar, .markdown-block-tools')) return;
+      if (target.closest('.block-source-editor, .rich-selection-toolbar, .markdown-block-tools, .markdown-insert-menu, .markdown-table-tools, .markdown-table-menu')) return;
       const element = target.closest<HTMLElement>('.markdown-block');
       const block = element && blockForElement(element);
       if (!element || !block || element.classList.contains('markdown-block--pending')) return;
@@ -535,7 +637,9 @@ export const MarkdownPreview = memo(forwardRef<MarkdownPreviewHandle, MarkdownPr
 
     const handleClick = (event: MouseEvent) => {
       const target = event.target as HTMLElement;
-      if (target.closest('a, button, input, .mermaid-figure__viewport, .mermaid-figure__actions, .block-source-editor, .rich-selection-toolbar, .markdown-block-tools, .inline-review-card')) return;
+      if (target.closest('a, button, input, .mermaid-figure__viewport, .mermaid-figure__actions, .block-source-editor, .rich-selection-toolbar, .markdown-block-tools, .markdown-insert-menu, .markdown-table-tools, .markdown-table-menu, .inline-review-card')) return;
+      const summary = target.closest('summary');
+      if (summary?.parentElement?.tagName === 'DETAILS') return;
       const element = target.closest<HTMLElement>('.markdown-block');
       const block = element && blockForElement(element);
       if (!element || !block) return;
@@ -543,6 +647,20 @@ export const MarkdownPreview = memo(forwardRef<MarkdownPreviewHandle, MarkdownPr
       if (selection && !selection.isCollapsed && selection.toString().trim()) return;
       const cell = target.closest<HTMLTableCellElement>('td, th');
       if (cell && element.contains(cell)) {
+        if (pendingCellFocus.current) {
+          const rowElement = cell.parentElement as HTMLTableRowElement | null;
+          const table = cell.closest('table');
+          if (rowElement && table) {
+            pendingCellFocus.current = {
+              index: block.index,
+              row: rowElement.parentElement?.tagName === 'THEAD'
+                ? -1
+                : [...(table.tBodies[0]?.rows ?? [])].indexOf(rowElement),
+              column: cell.cellIndex,
+            };
+          }
+          return;
+        }
         beginCellEdit(cell, block);
         return;
       }
@@ -562,7 +680,61 @@ export const MarkdownPreview = memo(forwardRef<MarkdownPreviewHandle, MarkdownPr
           finishCellEdit(false);
         } else if (event.key === 'Enter' || event.key === 'Tab') {
           event.preventDefault();
-          finishCellEdit(true);
+          const active = activeCell.current;
+          const table = active.element.closest('table');
+          const columnCount = table?.rows[0]?.cells.length ?? 1;
+          const bodyRowCount = table?.tBodies[0]?.rows.length ?? 0;
+          let nextRow = active.row;
+          let nextColumn = active.column;
+          if (event.key === 'Enter') {
+            nextRow = active.row + 1;
+          } else if (event.shiftKey) {
+            nextColumn -= 1;
+            if (nextColumn < 0) {
+              nextColumn = columnCount - 1;
+              nextRow = Math.max(-1, active.row - 1);
+            }
+          } else {
+            nextColumn += 1;
+            if (nextColumn >= columnCount) {
+              nextColumn = 0;
+              nextRow = active.row + 1;
+            }
+          }
+          const cellValue = (active.element.textContent ?? '').replace(/\s*\n+\s*/g, '<br>').trim();
+          let tableRaw = cellValue === active.initialValue
+            ? active.block.raw
+            : updateMarkdownTableCell(active.block.raw, active.row, active.column, cellValue) ?? active.block.raw;
+          const addTrailingRow = nextRow >= bodyRowCount;
+          if (addTrailingRow) {
+            const result = updateMarkdownTableStructure(tableRaw, 'row-below', bodyRowCount - 1, active.column);
+            tableRaw = result.value;
+            nextRow = result.row;
+          }
+          const changed = tableRaw !== active.block.raw;
+          pendingCellFocus.current = { index: active.block.index, row: nextRow, column: nextColumn };
+          active.element.removeAttribute('contenteditable');
+          active.element.classList.remove('markdown-table-cell--editing');
+          activeCell.current = null;
+          setTableTools(null);
+          setTableMenu(null);
+          if (changed) {
+            const nextMarkdown = replaceMarkdownBlock(markdownRef.current, active.block, tableRaw);
+            markdownRef.current = nextMarkdown;
+            onMarkdownChangeRef.current?.(nextMarkdown);
+          }
+          if (!changed) {
+            window.requestAnimationFrame(() => {
+              const pending = pendingCellFocus.current;
+              if (!pending) return;
+              const nextBlock = blocksRef.current.find((block) => block.index === pending.index);
+              const tableElement = bodyRef.current?.querySelector<HTMLElement>(`.markdown-block[data-block-index="${pending.index}"] table`);
+              const rowElement = pending.row < 0 ? (tableElement as HTMLTableElement | null)?.tHead?.rows[0] : (tableElement as HTMLTableElement | null)?.tBodies[0]?.rows[pending.row];
+              const cell = rowElement?.cells[pending.column];
+              if (cell && nextBlock) beginCellEdit(cell, nextBlock);
+              pendingCellFocus.current = null;
+            });
+          }
         }
         return;
       }
@@ -583,12 +755,20 @@ export const MarkdownPreview = memo(forwardRef<MarkdownPreviewHandle, MarkdownPr
         if (selection?.rangeCount) savedRange.current = selection.getRangeAt(0).cloneRange();
         const position = selectionToolsRef.current;
         setLinkEditor(position ? { position, value: '' } : null);
+      } else if (event.key === '/' && !(activeRich.current.element.textContent ?? '').trim()) {
+        event.preventDefault();
+        const rect = activeRich.current.element.getBoundingClientRect();
+        setInsertMenu({
+          index: activeRich.current.block.index,
+          top: Math.max(6, rect.top + 34),
+          left: Math.max(6, Math.min(window.innerWidth - 246, rect.left)),
+        });
       }
     };
 
     const handleFocusOut = (event: FocusEvent) => {
       const next = event.relatedTarget as HTMLElement | null;
-      if (next?.closest('.rich-selection-toolbar, .rich-link-editor, .markdown-block-tools, .block-source-editor')) return;
+      if (next?.closest('.rich-selection-toolbar, .rich-link-editor, .markdown-block-tools, .markdown-insert-menu, .markdown-table-tools, .markdown-table-menu, .block-source-editor')) return;
       if (activeCell.current && !activeCell.current.element.contains(next)) finishCellEdit(true);
       if (activeRich.current && !activeRich.current.element.contains(next)) finishRichEdit(true);
     };
@@ -626,13 +806,75 @@ export const MarkdownPreview = memo(forwardRef<MarkdownPreviewHandle, MarkdownPr
   }, [editable, linkEditor]);
 
   useEffect(() => {
+    const active = activeCell.current;
+    if (active) {
+      const nextBlock = blocksRef.current.find((block) => block.index === active.block.index);
+      const table = bodyRef.current?.querySelector<HTMLTableElement>(`.markdown-block[data-block-index="${active.block.index}"] table`);
+      const row = active.row < 0 ? table?.tHead?.rows[0] : table?.tBodies[0]?.rows[active.row];
+      const cell = row?.cells[active.column];
+      if (cell && nextBlock) {
+        const currentValue = active.element.textContent ?? '';
+        cell.textContent = currentValue;
+        cell.setAttribute('contenteditable', 'true');
+        cell.classList.add('markdown-table-cell--editing');
+        activeCell.current = { ...active, element: cell, block: nextBlock };
+        placeCaret(cell);
+        const rect = cell.getBoundingClientRect();
+        const tools = {
+          index: nextBlock.index,
+          row: active.row,
+          column: active.column,
+          top: Math.max(6, rect.top - 38),
+          left: Math.max(6, Math.min(window.innerWidth - 82, rect.left + rect.width / 2 - 36)),
+        };
+        setTableTools(tools);
+        const menuKind = tableMenuRef.current?.kind;
+        if (menuKind) setTableMenu({ ...tools, kind: menuKind });
+      } else {
+        activeCell.current = null;
+        setTableMenu(null);
+        setTableTools(null);
+      }
+    } else {
+      setTableMenu(null);
+      setTableTools(null);
+    }
     activeRich.current = null;
-    activeCell.current = null;
     setSourceEditor(null);
     setSelectionTools(null);
     setLinkEditor(null);
     setBlockMenu(null);
+    setInsertMenu(null);
   }, [html]);
+
+  useEffect(() => {
+    const pending = pendingCellFocus.current;
+    if (!pending) return;
+    const frame = window.requestAnimationFrame(() => {
+      const nextBlock = blocksRef.current.find((block) => block.index === pending.index);
+      const table = bodyRef.current?.querySelector<HTMLTableElement>(`.markdown-block[data-block-index="${pending.index}"] table`);
+      const row = pending.row < 0 ? table?.tHead?.rows[0] : table?.tBodies[0]?.rows[pending.row];
+      const cell = row?.cells[pending.column];
+      if (cell && nextBlock) beginCellEdit(cell, nextBlock);
+      pendingCellFocus.current = null;
+    });
+    return () => window.cancelAnimationFrame(frame);
+  }, [beginCellEdit, html]);
+
+  useEffect(() => {
+    const dismissMenus = (event: PointerEvent) => {
+      const target = event.target as HTMLElement;
+      if (blockMenu && !target.closest('.markdown-block-menu, .markdown-block-tools')) setBlockMenu(null);
+      if (insertMenu && !target.closest('.markdown-insert-menu, .markdown-block-tools')) setInsertMenu(null);
+      if (tableMenu && !target.closest('.markdown-table-menu, .markdown-table-tools')) setTableMenu(null);
+      if (linkEditor && !target.closest('.rich-link-editor, .rich-selection-toolbar')) {
+        setLinkEditor(null);
+        setSelectionTools(null);
+      }
+    };
+    document.addEventListener('pointerdown', dismissMenus, true);
+    return () => document.removeEventListener('pointerdown', dismissMenus, true);
+  }, [blockMenu, insertMenu, linkEditor, tableMenu]);
 
   const restoreSelection = () => {
     const range = savedRange.current;
@@ -680,7 +922,72 @@ export const MarkdownPreview = memo(forwardRef<MarkdownPreviewHandle, MarkdownPr
           : replaceMarkdownBlock(current, block, '');
     setBlockMenu(null);
     setBlockTools(null);
-    if (next !== current) onMarkdownChangeRef.current?.(next);
+    if (next !== current) {
+      markdownRef.current = next;
+      onMarkdownChangeRef.current?.(next);
+    }
+  };
+
+  const runBlockTransform = (kind: MarkdownBlockTransformKind) => {
+    if (!blockMenu) return;
+    finishCellEdit(true);
+    finishRichEdit(true);
+    const block = blocksRef.current.find((item) => item.index === blockMenu.index);
+    if (!block) return;
+    const transformed = transformMarkdownBlock(block.raw, kind);
+    const next = replaceMarkdownBlock(markdownRef.current, block, transformed);
+    setBlockMenu(null);
+    setBlockTools(null);
+    if (next !== markdownRef.current) {
+      markdownRef.current = next;
+      onMarkdownChangeRef.current?.(next);
+      onNotify?.('内容类型已转换。', 'success');
+    }
+  };
+
+  const runInsertOption = (kind: MarkdownBlockInsertKind) => {
+    if (!insertMenu) return;
+    finishCellEdit(true);
+    finishRichEdit(true);
+    const block = blocksRef.current.find((item) => item.index === insertMenu.index);
+    if (!block) return;
+    if (kind === 'paragraph') {
+      beginPendingBlock(block);
+      return;
+    }
+    const next = insertMarkdownAfterBlock(markdownRef.current, block, markdownForInsertedBlock(kind));
+    setInsertMenu(null);
+    setBlockTools(null);
+    markdownRef.current = next;
+    onMarkdownChangeRef.current?.(next);
+    onNotify?.('已插入内容块。', 'success');
+  };
+
+  const runTableOperation = (operation: MarkdownTableOperation) => {
+    if (!tableMenu) return;
+    const block = blocksRef.current.find((item) => item.index === tableMenu.index);
+    if (!block) return;
+    let tableRaw = block.raw;
+    const active = activeCell.current;
+    if (active?.block.index === block.index) {
+      const value = (active.element.textContent ?? '').replace(/\s*\n+\s*/g, '<br>').trim();
+      if (value !== active.initialValue) tableRaw = updateMarkdownTableCell(tableRaw, active.row, active.column, value) ?? tableRaw;
+      active.element.removeAttribute('contenteditable');
+      active.element.classList.remove('markdown-table-cell--editing');
+      activeCell.current = null;
+    }
+    try {
+      const result = updateMarkdownTableStructure(tableRaw, operation, tableMenu.row, tableMenu.column);
+      const next = replaceMarkdownBlock(markdownRef.current, block, result.value);
+      pendingCellFocus.current = { index: block.index, row: result.row, column: result.column };
+      setTableMenu(null);
+      setTableTools(null);
+      markdownRef.current = next;
+      onMarkdownChangeRef.current?.(next);
+      onNotify?.('表格已更新。', 'success');
+    } catch (error) {
+      onNotify?.(error instanceof Error ? error.message : '无法修改表格。', 'error');
+    }
   };
 
   const previewStyle = {
@@ -697,11 +1004,22 @@ export const MarkdownPreview = memo(forwardRef<MarkdownPreviewHandle, MarkdownPr
 
       {editable && blockTools && !sourceEditor ? (
         <div className="markdown-block-tools" style={{ left: blockTools.left, top: blockTools.top }}>
-          <IconButton icon={Plus} label="在下面插入内容" onMouseDown={(event) => event.preventDefault()} onClick={() => {
-            const block = blocksRef.current.find((item) => item.index === blockTools.index);
-            if (block) beginPendingBlock(block);
+          <IconButton active={insertMenu?.index === blockTools.index} icon={Plus} label="在下面插入内容" onMouseDown={(event) => event.preventDefault()} onClick={() => {
+            finishCellEdit(true);
+            finishRichEdit(true);
+            setBlockMenu(null);
+            setInsertMenu((current) => current?.index === blockTools.index ? null : blockTools);
           }} />
           <IconButton active={blockMenu?.index === blockTools.index} icon={GripVertical} label="这一块的操作" onMouseDown={(event) => event.preventDefault()} onClick={() => setBlockMenu((current) => current?.index === blockTools.index ? null : blockTools)} />
+        </div>
+      ) : null}
+
+      {editable && insertMenu ? (
+        <div className="markdown-insert-menu" style={{ left: insertMenu.left, top: insertMenu.top + 34 }}>
+          <strong>插入内容</strong>
+          <div>
+            {INSERT_OPTIONS.map((option) => <button key={option.kind} onClick={() => runInsertOption(option.kind)} type="button"><option.icon aria-hidden="true" size={15} /><span>{option.label}</span></button>)}
+          </div>
         </div>
       ) : null}
 
@@ -710,7 +1028,37 @@ export const MarkdownPreview = memo(forwardRef<MarkdownPreviewHandle, MarkdownPr
           <button disabled={blocksRef.current[0]?.index === blockMenu.index} onClick={() => runBlockAction('up')} type="button"><ArrowUp size={15} />上移</button>
           <button disabled={blocksRef.current.at(-1)?.index === blockMenu.index} onClick={() => runBlockAction('down')} type="button"><ArrowDown size={15} />下移</button>
           <button onClick={() => runBlockAction('copy')} type="button"><Copy size={15} />复制这一块</button>
+          <span className="markdown-block-menu__heading">转换为</span>
+          {TRANSFORM_OPTIONS.map((option) => <button key={option.kind} onClick={() => runBlockTransform(option.kind)} type="button"><option.icon aria-hidden="true" size={15} />{option.label}</button>)}
+          <span className="markdown-block-menu__separator" />
           <button className="markdown-block-menu__danger" onClick={() => runBlockAction('delete')} type="button"><Trash2 size={15} />删除</button>
+        </div>
+      ) : null}
+
+      {editable && tableTools && !sourceEditor ? (
+        <div className="markdown-table-tools" style={{ left: tableTools.left, top: tableTools.top }}>
+          <IconButton active={tableMenu?.kind === 'row'} icon={Rows3} label="行操作" onMouseDown={(event) => event.preventDefault()} onClick={() => setTableMenu((current) => current?.kind === 'row' ? null : { ...tableTools, kind: 'row' })} />
+          <IconButton active={tableMenu?.kind === 'column'} icon={Columns3} label="列操作" onMouseDown={(event) => event.preventDefault()} onClick={() => setTableMenu((current) => current?.kind === 'column' ? null : { ...tableTools, kind: 'column' })} />
+        </div>
+      ) : null}
+
+      {editable && tableMenu ? (
+        <div className="markdown-table-menu" onMouseDown={(event) => event.preventDefault()} style={{ left: tableMenu.left, top: tableMenu.top + 36 }}>
+          {tableMenu.kind === 'row' ? <>
+            <button disabled={tableMenu.row < 0} onClick={() => runTableOperation('row-above')} type="button"><ArrowUp size={15} />在上方插入一行</button>
+            <button onClick={() => runTableOperation('row-below')} type="button"><ArrowDown size={15} />在下方插入一行</button>
+            <span />
+            <button className="markdown-table-menu__danger" disabled={tableMenu.row < 0} onClick={() => runTableOperation('row-delete')} type="button"><Trash2 size={15} />删除这一行</button>
+          </> : <>
+            <button onClick={() => runTableOperation('column-left')} type="button"><ArrowLeft size={15} />在左侧插入一列</button>
+            <button onClick={() => runTableOperation('column-right')} type="button"><ArrowRight size={15} />在右侧插入一列</button>
+            <span className="markdown-table-menu__heading">这一列的对齐</span>
+            <button onClick={() => runTableOperation('align-left')} type="button"><AlignLeft size={15} />左对齐</button>
+            <button onClick={() => runTableOperation('align-center')} type="button"><AlignCenter size={15} />居中</button>
+            <button onClick={() => runTableOperation('align-right')} type="button"><AlignRight size={15} />右对齐</button>
+            <span />
+            <button className="markdown-table-menu__danger" onClick={() => runTableOperation('column-delete')} type="button"><Trash2 size={15} />删除这一列</button>
+          </>}
         </div>
       ) : null}
 

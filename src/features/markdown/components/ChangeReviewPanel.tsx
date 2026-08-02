@@ -29,8 +29,10 @@ export function ChangeReviewPanel({
   onSave,
   showMarks,
   showAll,
+  showCurrent,
   onShowMarksChange,
-  onShowAllChange,
+  onViewAll,
+  onViewCurrent,
   destinationLabel,
 }: {
   changes: ReviewChange[];
@@ -43,8 +45,10 @@ export function ChangeReviewPanel({
   onSave: () => void;
   showMarks: boolean;
   showAll: boolean;
+  showCurrent: boolean;
   onShowMarksChange: (value: boolean) => void;
-  onShowAllChange: (value: boolean) => void;
+  onViewAll: () => void;
+  onViewCurrent: () => void;
   destinationLabel: string;
 }) {
   const counts = changes.reduce((result, change) => ({ ...result, [change.kind]: result[change.kind] + 1 }), { added: 0, modified: 0, removed: 0 });
@@ -57,7 +61,6 @@ export function ChangeReviewPanel({
           <IconButton disabled={changes.length === 0} icon={ChevronUp} label="上一处改动" onClick={() => onStep(-1)} />
           <span>{changes.length > 0 ? `${current + 1}/${changes.length}` : '0/0'}</span>
           <IconButton disabled={changes.length === 0} icon={ChevronDown} label="下一处改动" onClick={() => onStep(1)} />
-          <IconButton active={showAll} disabled={changes.length === 0} icon={ChevronsUpDown} label={showAll ? '收起正文中的全部改动' : '在正文中展开全部改动'} onClick={() => onShowAllChange(!showAll)} />
           <IconButton icon={X} label="关闭改动审阅" onClick={onClose} />
         </div>
       </header>
@@ -66,6 +69,11 @@ export function ChangeReviewPanel({
         <span data-kind="added">+{counts.added} 新增</span>
         <span data-kind="modified">~{counts.modified} 修改</span>
         <span data-kind="removed">-{counts.removed} 删除</span>
+      </div>
+
+      <div aria-label="正文中的改动显示方式" className="change-review-panel__view-modes" role="group">
+        <button aria-pressed={showCurrent && !showAll} disabled={changes.length === 0} onClick={onViewCurrent} type="button"><ChevronDown aria-hidden="true" size={14} />查看当前</button>
+        <button aria-pressed={showAll} disabled={changes.length === 0} onClick={onViewAll} type="button"><ChevronsUpDown aria-hidden="true" size={14} />查看全部</button>
       </div>
 
       {changes.length === 0 ? (

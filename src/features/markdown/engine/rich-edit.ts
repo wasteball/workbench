@@ -193,6 +193,49 @@ interface MarkdownTable {
   rows: string[][];
 }
 
+export type MarkdownTableOperation =
+  | 'row-above'
+  | 'row-below'
+  | 'row-delete'
+  | 'column-left'
+  | 'column-right'
+  | 'column-delete'
+  | 'align-left'
+  | 'align-center'
+  | 'align-right';
+
+export interface MarkdownTableOperationResult {
+  value: string;
+  row: number;
+  column: number;
+}
+
+export type MarkdownBlockInsertKind =
+  | 'paragraph'
+  | 'heading-2'
+  | 'heading-3'
+  | 'bullet-list'
+  | 'numbered-list'
+  | 'task-list'
+  | 'table'
+  | 'blockquote'
+  | 'callout'
+  | 'divider'
+  | 'code'
+  | 'mermaid'
+  | 'math'
+  | 'image';
+
+export type MarkdownBlockTransformKind =
+  | 'paragraph'
+  | 'heading-2'
+  | 'heading-3'
+  | 'bullet-list'
+  | 'numbered-list'
+  | 'task-list'
+  | 'blockquote'
+  | 'code';
+
 function parseMarkdownTable(raw: string): MarkdownTable | null {
   const lines = raw.trimEnd().split(/\r?\n/).filter((line) => line.trim());
   if (lines.length < 2 || !/^[\s|:-]+$/.test(lines[1] ?? '')) return null;
@@ -229,10 +272,10 @@ function serializeMarkdownTable(table: MarkdownTable): string {
   const line = (cells: string[]) => `| ${cells.map((cell, column) => padCell(cell, widths[column] ?? 3)).join(' | ')} |`;
   const delimiter = `| ${table.align.map((align, column) => {
     const width = widths[column] ?? 3;
-    if (align === 'center') return `:${'-'.repeat(Math.max(1, width - 2))}:`;
-    if (align === 'right') return `${'-'.repeat(Math.max(1, width - 1))}:`;
-    if (align === 'left') return `:${'-'.repeat(Math.max(1, width - 1))}`;
-    return '-'.repeat(width);
+    if (align === 'center') return `:${'-'.repeat(Math.max(3, width - 2))}:`;
+    if (align === 'right') return `${'-'.repeat(Math.max(3, width - 1))}:`;
+    if (align === 'left') return `:${'-'.repeat(Math.max(3, width - 1))}`;
+    return '-'.repeat(Math.max(3, width));
   }).join(' | ')} |`;
   return [line(table.head), delimiter, ...table.rows.map(line)].join('\n');
 }
@@ -245,4 +288,102 @@ export function updateMarkdownTableCell(raw: string, row: number, column: number
   else if (table.rows[row]) table.rows[row][column] = escaped;
   else return null;
   return serializeMarkdownTable(table);
+}
+
+function blankTableRow(columns: number): string[] {
+  return Array.from({ length: columns }, () => '');
+}
+
+export function updateMarkdownTableStructure(
+  raw: string,
+  operation: MarkdownTableOperation,
+  row: number,
+  column: number,
+): MarkdownTableOperationResult {
+  const table = parseMarkdownTable(raw);
+  if (!table) throw new Error('这不是一个标准 Markdown 表格。');
+  if (column < 0 || column >= table.head.length) throw new Error('没有找到这一列。');
+
+  let nextRow = row;
+  let nextColumn = column;
+  const columnCount = table.head.length;
+
+  if (operation === 'row-above') {
+    if (row < 0) throw new Error('表头上面不能插入正文行。');
+    table.rows.splice(row, 0, blankTableRow(columnCount));
+  } else if (operation === 'row-below') {
+    nextRow = row < 0 ? 0 : row + 1;
+    table.rows.splice(nextRow, 0, blankTableRow(columnCount));
+  } else if (operation === 'row-delete') {
+    if (row < 0) throw new Error('表头不能删除。');
+    table.rows.splice(row, 1);
+    nextRow = Math.min(row, table.rows.length - 1);
+  } else if (operation === 'column-left') {
+    table.head.splice(column, 0, '');
+    table.align.splice(column, 0, '');
+    table.rows.forEach((cells) => cells.splice(column, 0, ''));
+  } else if (operation === 'column-right') {
+    nextColumn = column + 1;
+    table.head.splice(nextColumn, 0, '');
+    table.align.splice(nextColumn, 0, '');
+    table.rows.forEach((cells) => cells.splice(nextColumn, 0, ''));
+  } else if (operation === 'column-delete') {
+    if (columnCount <= 1) throw new Error('表格至少要保留一列。');
+    table.head.splice(column, 1);
+    table.align.splice(column, 1);
+    table.rows.forEach((cells) => cells.splice(column, 1));
+    nextColumn = Math.min(column, table.head.length - 1);
+  } else {
+    table.align[column] = operation === 'align-center' ? 'center' : operation === 'align-right' ? 'right' : 'left';
+  }
+
+  return {
+    value: serializeMarkdownTable(table),
+    row: nextRow,
+    column: nextColumn,
+  };
+}
+
+export function markdownForInsertedBlock(kind: MarkdownBlockInsertKind): string {
+  const blocks: Record<MarkdownBlockInsertKind, string> = {
+    paragraph: '在这里写点什么',
+    'heading-2': '## 标题',
+    'heading-3': '### 标题',
+    'bullet-list': '- 列表项\n- 列表项',
+    'numbered-list': '1. 第一项\n2. 第二项',
+    'task-list': '- [ ] 待办事项\n- [ ] 待办事项',
+    table: '| 列 1 | 列 2 | 列 3 |\n| --- | --- | --- |\n|     |     |     |\n|     |     |     |',
+    blockquote: '> 引用内容',
+    callout: '> [!TIP]\n> 提示内容',
+    divider: '---',
+    code: '```text\n\n```',
+    mermaid: '```mermaid\nflowchart TD\n  A[开始] --> B[结束]\n```',
+    math: '$$\nE = mc^2\n$$',
+    image: '![图片描述](图片地址)',
+  };
+  return blocks[kind];
+}
+
+function strippedBlockLines(raw: string): string[] {
+  return raw
+    .trimEnd()
+    .split(/\r?\n/)
+    .map((line) => line
+      .replace(/^\s{0,3}(?:#{1,6}\s+|>\s?|[-*+]\s+(?:\[[ xX]\]\s+)?|\d+[.)]\s+)/, '')
+      .replace(/^```.*$/, '')
+      .trim())
+    .filter(Boolean);
+}
+
+export function transformMarkdownBlock(raw: string, kind: MarkdownBlockTransformKind): string {
+  const lines = strippedBlockLines(raw);
+  if (lines.length === 0) return raw;
+  if (kind === 'paragraph') return lines.join('\n\n');
+  if (kind === 'heading-2') return `## ${lines.join(' ')}`;
+  if (kind === 'heading-3') return `### ${lines.join(' ')}`;
+  if (kind === 'bullet-list') return lines.map((line) => `- ${line}`).join('\n');
+  if (kind === 'numbered-list') return lines.map((line, index) => `${index + 1}. ${line}`).join('\n');
+  if (kind === 'task-list') return lines.map((line) => `- [ ] ${line}`).join('\n');
+  if (kind === 'blockquote') return lines.map((line) => `> ${line}`).join('\n');
+  return `\`\`\`text\n${lines.join('\n')}\n\`\`\``;
 }

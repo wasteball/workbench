@@ -1,6 +1,6 @@
 {
   "name": "workbench-browser-extension",
-  "version": "0.1.3",
+  "version": "0.1.4",
   "private": true,
   "type": "module",
   "description": "A local-first Markdown and file workbench for Chrome, Edge, and Safari.",

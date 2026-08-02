@@ -374,6 +374,43 @@
   font-size: 12px;
 }
 
+.workspace-toast {
+  position: fixed;
+  z-index: 120;
+  left: 50%;
+  bottom: 22px;
+  max-width: min(560px, calc(100vw - 28px));
+  transform: translateX(-50%);
+  border: 1px solid color-mix(in srgb, var(--color-ink) 12%, transparent);
+  border-radius: 7px;
+  padding: 10px 15px;
+  background: var(--color-ink);
+  box-shadow: var(--shadow-panel);
+  color: var(--color-canvas);
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 1.45;
+  text-align: center;
+  animation: workspace-toast-in 160ms ease-out;
+}
+
+.workspace-toast--success {
+  border-color: #13795b;
+  background: #13795b;
+  color: #fff;
+}
+
+.workspace-toast--error {
+  border-color: var(--color-danger);
+  background: var(--color-danger);
+  color: #fff;
+}
+
+@keyframes workspace-toast-in {
+  from { opacity: 0; transform: translate(-50%, 8px); }
+  to { opacity: 1; transform: translate(-50%, 0); }
+}
+
 .workspace-statusbar {
   display: grid;
   min-width: 0;
@@ -394,27 +431,44 @@
   white-space: nowrap;
 }
 
+.export-control {
+  display: inline-flex;
+  align-items: stretch;
+}
+
+.export-control__primary.ui-button {
+  border-radius: 999px 0 0 999px;
+  padding-right: 9px;
+}
+
 .export-menu {
   position: relative;
 }
 
 .export-menu summary {
-  display: inline-flex;
+  display: grid;
+  width: 34px;
   min-height: 34px;
-  align-items: center;
-  gap: 6px;
+  place-items: center;
   border: 1px solid var(--color-border-strong);
-  border-radius: 999px;
-  padding: 0 11px;
+  border-left: 0;
+  border-radius: 0 999px 999px 0;
+  padding: 0;
   background: var(--color-canvas);
+  color: var(--color-muted);
   cursor: pointer;
-  font-size: 13px;
-  font-weight: 600;
   list-style: none;
 }
 
 .export-menu summary::-webkit-details-marker {
   display: none;
+}
+
+.export-menu[open] summary,
+.export-menu summary:hover,
+.export-menu summary:focus-visible {
+  background: var(--color-canvas-soft);
+  color: var(--color-primary);
 }
 
 .export-menu__panel {
@@ -448,6 +502,11 @@
 
 .export-menu__panel button:hover {
   background: var(--color-canvas-soft);
+}
+
+.export-menu__panel button[aria-current='true'] {
+  box-shadow: inset 3px 0 0 var(--color-primary);
+  background: var(--color-primary-soft);
 }
 
 .export-menu__panel small {

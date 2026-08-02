@@ -19,6 +19,8 @@ $x^2$
 `);
 
     expect(result.html).toContain('<table');
+    expect(result.html).toContain('<colgroup>');
+    expect(result.html).toContain('style="width:');
     expect(result.html).toContain('class="katex"');
     expect(result.html).not.toContain('<script');
     expect(result.html).not.toContain('onerror');
@@ -41,7 +43,27 @@ $x^2$
 
     expect(result.html).toContain('language-mermaid');
     expect(result.html).toContain('flowchart TD');
+    expect(result.html).toContain('<pre><code class="hljs language-mermaid">');
     expect(result.blocks).toHaveLength(1);
     expect(result.blocks[0]).toMatchObject({ type: 'code', from: 0 });
+  });
+
+  it('keeps details intact while annotating editable blocks inside them', async () => {
+    const result = await renderMarkdown(`<details>
+<summary><strong>展开查看</strong></summary>
+
+正文内容
+
+| A | B |
+| --- | --- |
+| 1 | 2 |
+
+</details>`);
+
+    expect(result.html).toContain('<details>');
+    expect(result.html).toContain('<summary><strong>展开查看</strong></summary>');
+    expect(result.html).toContain('data-block-type="paragraph"');
+    expect(result.html).toContain('data-block-type="table"');
+    expect(result.blocks.map((block) => block.type)).toEqual(['paragraph', 'table']);
   });
 });

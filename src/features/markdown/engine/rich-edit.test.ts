@@ -2,10 +2,13 @@ import { describe, expect, it } from 'vitest';
 
 import {
   duplicateMarkdownBlock,
+  markdownForInsertedBlock,
   markdownFromEditableBlock,
   moveMarkdownBlock,
   replaceMarkdownBlock,
+  transformMarkdownBlock,
   updateMarkdownTableCell,
+  updateMarkdownTableStructure,
 } from '@/features/markdown/engine/rich-edit';
 import type { MarkdownBlock } from '@/features/markdown/engine/render-markdown';
 
@@ -38,5 +41,29 @@ describe('rich Markdown editing', () => {
 
     expect(updated).toContain('| 工作台 | 已完成 |');
     expect(updated).toContain('| ------ | ------ |');
+  });
+
+  it('adds, removes, and aligns table rows and columns', () => {
+    const table = '| 名称 | 状态 |\n| --- | --- |\n| 工作台 | 进行中 |';
+    const withRow = updateMarkdownTableStructure(table, 'row-below', 0, 1);
+    expect(withRow.row).toBe(1);
+    expect(withRow.value.split('\n')).toHaveLength(4);
+
+    const withColumn = updateMarkdownTableStructure(withRow.value, 'column-right', 0, 0);
+    expect(withColumn.column).toBe(1);
+    expect(withColumn.value.split('\n')[0]?.replace(/\s+/g, ' ')).toBe('| 名称 | | 状态 |');
+
+    const aligned = updateMarkdownTableStructure(withColumn.value, 'align-center', 0, 1);
+    expect(aligned.value.split('\n')[1]).toContain(':---:');
+
+    const withoutRow = updateMarkdownTableStructure(aligned.value, 'row-delete', 1, 1);
+    expect(withoutRow.value.split('\n')).toHaveLength(3);
+  });
+
+  it('provides structured insertions and block conversions', () => {
+    expect(markdownForInsertedBlock('table')).toContain('| 列 1 | 列 2 | 列 3 |');
+    expect(markdownForInsertedBlock('mermaid')).toContain('flowchart TD');
+    expect(transformMarkdownBlock('普通文字', 'heading-2')).toBe('## 普通文字');
+    expect(transformMarkdownBlock('- 第一项\n- 第二项', 'numbered-list')).toBe('1. 第一项\n2. 第二项');
   });
 });

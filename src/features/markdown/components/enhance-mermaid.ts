@@ -1,6 +1,6 @@
 import DOMPurify from 'dompurify';
 import { createElement } from 'react';
-import { createRoot } from 'react-dom/client';
+import { renderToStaticMarkup } from 'react-dom/server';
 import {
   Check,
   Code2,
@@ -15,10 +15,11 @@ import {
   ZoomOut,
   type LucideIcon,
 } from 'lucide-react';
-import mermaid from 'mermaid';
-import { nanoid } from 'nanoid';
+
+import { renderMermaidSvg } from '@/features/markdown/engine/mermaid-renderer';
 
 type Cleanup = () => void;
+type Notify = (message: string, kind?: 'info' | 'success' | 'error') => void;
 
 interface DiagramDimensions {
   width: number;
@@ -30,8 +31,6 @@ interface DiagramTool {
   update: (label: string, icon: LucideIcon) => void;
 }
 
-let renderQueue: Promise<unknown> = Promise.resolve();
-
 function listen(
   target: EventTarget,
   type: string,
@@ -41,30 +40,6 @@ function listen(
 ) {
   target.addEventListener(type, listener, options);
   cleanups.push(() => target.removeEventListener(type, listener, options));
-}
-
-function fixEncodedEntities(svg: string): string {
-  return svg.replace(/&amp;(gt|lt|amp|quot|apos|nbsp|#\d+|#x[0-9a-f]+);/gi, '&$1;');
-}
-
-function quoteQuadrantText(raw: string): string {
-  const match = /^(\s*)([\s\S]*?)(\s*)$/.exec(raw);
-  const value = match?.[2] ?? raw;
-  if (!Array.from(value).some((character) => character.charCodeAt(0) > 0x7f) || /^"[\s\S]*"$/.test(value)) return raw;
-  return `${match?.[1] ?? ''}"${value.replace(/"/g, '#34;')}"${match?.[3] ?? ''}`;
-}
-
-function prepareMermaidSource(source: string): string {
-  if (!/(?:^|\n)\s*quadrantChart\s*(?:\n|$)/i.test(source)) return source;
-  return source.split(/\r?\n/).map((line) => {
-    const axis = /^(\s*[xy]-axis\s+)(.+?)(\s*-->\s*)(.+?)(\s*)$/i.exec(line);
-    if (axis) return `${axis[1] ?? ''}${quoteQuadrantText(axis[2] ?? '')}${axis[3] ?? ''}${quoteQuadrantText(axis[4] ?? '')}${axis[5] ?? ''}`;
-    const quadrant = /^(\s*quadrant-[1-4]\s+)(.+?)(\s*)$/i.exec(line);
-    if (quadrant) return `${quadrant[1] ?? ''}${quoteQuadrantText(quadrant[2] ?? '')}${quadrant[3] ?? ''}`;
-    const point = /^(\s*)(.+?)(\s*:\s*\[[^\]]+\]\s*)$/.exec(line);
-    if (point) return `${point[1] ?? ''}${quoteQuadrantText(point[2] ?? '')}${point[3] ?? ''}`;
-    return line;
-  }).join('\n');
 }
 
 function dimensions(svg: SVGSVGElement): DiagramDimensions {
@@ -84,13 +59,12 @@ function makeTool(label: string, icon: LucideIcon, action: string, cleanups: Cle
   const button = document.createElement('button');
   button.type = 'button';
   button.dataset.diagramAction = action;
-  const root = createRoot(button);
   let active = true;
   const update = (nextLabel: string, nextIcon: LucideIcon) => {
     if (!active) return;
     button.setAttribute('aria-label', nextLabel);
     button.title = nextLabel;
-    root.render(createElement(nextIcon, {
+    button.innerHTML = renderToStaticMarkup(createElement(nextIcon, {
       'aria-hidden': true,
       size: 17,
       strokeWidth: 1.8,
@@ -99,7 +73,7 @@ function makeTool(label: string, icon: LucideIcon, action: string, cleanups: Cle
   update(label, icon);
   cleanups.push(() => {
     active = false;
-    root.unmount();
+    button.replaceChildren();
   });
   return { button, update };
 }
@@ -240,7 +214,7 @@ function svgToPng(svg: SVGSVGElement): Promise<Blob> {
   });
 }
 
-async function copyDiagram(svg: SVGSVGElement, tool: DiagramTool) {
+async function copyDiagram(svg: SVGSVGElement, tool: DiagramTool, notify?: Notify) {
   tool.update('Preparing', LoaderCircle);
   const restore = () => tool.update('Copy image', Copy);
   try {
@@ -249,6 +223,7 @@ async function copyDiagram(svg: SVGSVGElement, tool: DiagramTool) {
       try {
         await navigator.clipboard.write([new ClipboardItem({ 'image/png': blob })]);
         tool.update('Copied', Check);
+        notify?.('Mermaid 图片已复制到剪贴板。', 'success');
         window.setTimeout(restore, 1_400);
         return;
       } catch {
@@ -262,13 +237,15 @@ async function copyDiagram(svg: SVGSVGElement, tool: DiagramTool) {
     anchor.click();
     window.setTimeout(() => URL.revokeObjectURL(url), 0);
     tool.update('Downloaded', Download);
-  } catch {
+    notify?.('浏览器未允许复制图片，已改为下载 PNG。', 'info');
+  } catch (error) {
     tool.update('Failed', X);
+    notify?.(error instanceof Error ? `复制图片失败：${error.message}` : '复制图片失败。', 'error');
   }
   window.setTimeout(restore, 1_400);
 }
 
-function mountDiagram(pre: HTMLElement, source: string, svgMarkup: string): Cleanup[] {
+function mountDiagram(pre: HTMLElement, source: string, svgMarkup: string, notify?: Notify): Cleanup[] {
   const cleanups: Cleanup[] = [];
   const figure = document.createElement('figure');
   figure.className = 'mermaid-figure';
@@ -289,7 +266,7 @@ function mountDiagram(pre: HTMLElement, source: string, svgMarkup: string): Clea
   viewport.className = 'mermaid-figure__viewport';
   const stage = document.createElement('div');
   stage.className = 'mermaid-figure__stage';
-  stage.innerHTML = String(DOMPurify.sanitize(fixEncodedEntities(svgMarkup), { USE_PROFILES: { svg: true, svgFilters: true } }));
+  stage.innerHTML = String(DOMPurify.sanitize(svgMarkup, { USE_PROFILES: { svg: true, svgFilters: true } }));
   const svg = stage.querySelector<SVGSVGElement>('svg');
   const controls = document.createElement('div');
   controls.className = 'mermaid-figure__controls';
@@ -311,7 +288,7 @@ function mountDiagram(pre: HTMLElement, source: string, svgMarkup: string): Clea
   }) as EventListener, cleanups);
   if (svg) {
     installPanZoom(figure, viewport, stage, svg, controls, cleanups);
-    listen(copyTool.button, 'click', (() => void copyDiagram(svg, copyTool)) as EventListener, cleanups);
+    listen(copyTool.button, 'click', (() => void copyDiagram(svg, copyTool, notify)) as EventListener, cleanups);
   } else {
     viewport.textContent = '图表无法显示，已保留源码。';
     copyTool.button.disabled = true;
@@ -319,47 +296,22 @@ function mountDiagram(pre: HTMLElement, source: string, svgMarkup: string): Clea
   return cleanups;
 }
 
-function clearTemporaryNode(id: string) {
-  document.getElementById(`d${id}`)?.remove();
-  const direct = document.getElementById(id);
-  if (direct?.parentElement === document.body) direct.remove();
-}
-
-function queuedRender(id: string, source: string) {
-  const render = () => mermaid.render(id, source);
-  const result = renderQueue.then(render, render);
-  renderQueue = result.then(() => undefined, () => undefined);
-  return result;
-}
-
-export async function enhanceMermaidDiagrams(body: HTMLElement, signal?: AbortSignal): Promise<Cleanup[]> {
+export async function enhanceMermaidDiagrams(body: HTMLElement, signal?: AbortSignal, notify?: Notify): Promise<Cleanup[]> {
   const dark = document.documentElement.dataset.theme === 'dark';
-  mermaid.initialize({
-    startOnLoad: false,
-    securityLevel: 'strict',
-    suppressErrorRendering: true,
-    htmlLabels: false,
-    flowchart: { htmlLabels: false, useMaxWidth: false },
-    theme: dark ? 'dark' : 'default',
-  });
-
   const cleanups: Cleanup[] = [];
   const blocks = [...body.querySelectorAll<HTMLElement>('pre > code.language-mermaid')];
   for (const code of blocks) {
     const pre = code.parentElement;
     if (!pre) continue;
     const source = code.textContent ?? '';
-    const id = `workbench-mermaid-${nanoid(8)}`;
     try {
-      const result = await queuedRender(id, prepareMermaidSource(source));
+      const svg = await renderMermaidSvg(source, dark ? 'dark' : 'default');
       if (signal?.aborted || !pre.isConnected) continue;
-      cleanups.push(...mountDiagram(pre, source, result.svg));
+      cleanups.push(...mountDiagram(pre, source, svg, notify));
     } catch (error) {
       if (!signal?.aborted && pre.isConnected) {
         pre.dataset.renderError = error instanceof Error ? `图表无法渲染：${error.message}` : '图表无法渲染，已保留源码。';
       }
-    } finally {
-      clearTemporaryNode(id);
     }
   }
   return cleanups;

@@ -12,6 +12,16 @@ type OpenFilePicker = (options: {
 
 type OpenDirectoryPicker = () => Promise<FileSystemDirectoryHandle>;
 
+type SaveFilePicker = (options: {
+  suggestedName: string;
+  types: Array<{ description: string; accept: Record<string, string[]> }>;
+}) => Promise<FileSystemFileHandle>;
+
+type WritableFileHandle = FileSystemFileHandle & {
+  queryPermission?: (options: { mode: 'readwrite' }) => Promise<PermissionState>;
+  requestPermission?: (options: { mode: 'readwrite' }) => Promise<PermissionState>;
+};
+
 const MARKDOWN_TYPES = [{
   description: 'Markdown 文档',
   accept: { 'text/markdown': ['.md', '.markdown'], 'text/plain': ['.txt'] },
@@ -215,4 +225,33 @@ export async function resolvePickedMarkdownFile(picked: PickedMarkdownFile): Pro
   if (picked.file) return picked.file;
   if (picked.handle) return picked.handle.getFile();
   throw new Error(`无法读取 ${picked.name}。`);
+}
+
+export async function pickMarkdownSaveFile(suggestedName: string): Promise<FileSystemFileHandle | null | undefined> {
+  const picker = (window as unknown as { showSaveFilePicker?: SaveFilePicker }).showSaveFilePicker;
+  if (!picker) return undefined;
+  try {
+    return await picker({ suggestedName, types: MARKDOWN_TYPES });
+  } catch (error) {
+    if (error instanceof DOMException && error.name === 'AbortError') return null;
+    throw error;
+  }
+}
+
+export async function writeMarkdownFile(handle: FileSystemFileHandle, content: string): Promise<boolean> {
+  const permissionHandle = handle as WritableFileHandle;
+  let permission = await permissionHandle.queryPermission?.({ mode: 'readwrite' });
+  if (permission !== 'granted' && permissionHandle.requestPermission) {
+    try {
+      permission = await permissionHandle.requestPermission({ mode: 'readwrite' });
+    } catch (error) {
+      if (error instanceof DOMException && (error.name === 'AbortError' || error.name === 'NotAllowedError')) return false;
+      throw error;
+    }
+  }
+  if (permissionHandle.queryPermission && permission !== 'granted') return false;
+  const writable = await handle.createWritable();
+  await writable.write(content);
+  await writable.close();
+  return true;
 }

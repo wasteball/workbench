@@ -174,11 +174,27 @@ export const documentService = {
     return updated ? { record: updated, content, baseline: content, needsSource: false } : undefined;
   },
 
-  async markSavedOriginal(id: string): Promise<void> {
+  async attachSavedFile(id: string, fileHandle: FileSystemFileHandle, title?: string): Promise<DocumentRecord | undefined> {
+    const record = await db.documents.get(id);
+    if (!record) return undefined;
+    await db.documents.update(id, {
+      source: 'file',
+      sourceLabel: fileHandle.name,
+      sourceUrl: null,
+      fileHandle,
+      title: title?.trim() || record.title,
+      updatedAt: Date.now(),
+      lastDestination: 'original-file',
+    });
+    return db.documents.get(id);
+  },
+
+  async markSavedOriginal(id: string, title?: string): Promise<void> {
     await db.documents.update(id, {
       draftContent: null,
       baselineContent: null,
       draftUpdatedAt: null,
+      ...(title?.trim() ? { title: title.trim() } : {}),
       updatedAt: Date.now(),
       lastSavedAt: Date.now(),
       lastDestination: 'original-file',

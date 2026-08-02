@@ -16,6 +16,7 @@ const ACCENTS: Array<{ value: AccentColor; label: string }> = [
 
 export function ReadingSettingsPanel() {
   const { settings, update } = useSettings();
+  const detailsRef = useRef<HTMLDetailsElement>(null);
   const [fontSize, setFontSize] = useState(settings.readingFontSize);
   const [readingWidth, setReadingWidth] = useState(settings.readingWidth);
   const updateTimer = useRef<number | null>(null);
@@ -25,6 +26,24 @@ export function ReadingSettingsPanel() {
   useEffect(() => setReadingWidth(settings.readingWidth), [settings.readingWidth]);
   useEffect(() => () => {
     if (updateTimer.current !== null) window.clearTimeout(updateTimer.current);
+  }, []);
+
+  useEffect(() => {
+    const closeOutside = (event: PointerEvent) => {
+      const details = detailsRef.current;
+      if (details?.open && !details.contains(event.target as Node)) details.removeAttribute('open');
+    };
+    const closeOnEscape = (event: KeyboardEvent) => {
+      if (event.key !== 'Escape' || !detailsRef.current?.open) return;
+      detailsRef.current.removeAttribute('open');
+      detailsRef.current.querySelector<HTMLElement>('summary')?.focus();
+    };
+    document.addEventListener('pointerdown', closeOutside, true);
+    document.addEventListener('keydown', closeOnEscape);
+    return () => {
+      document.removeEventListener('pointerdown', closeOutside, true);
+      document.removeEventListener('keydown', closeOnEscape);
+    };
   }, []);
 
   const queueUpdate = (patch: Parameters<typeof update>[0]) => {
@@ -41,7 +60,7 @@ export function ReadingSettingsPanel() {
   const setFont = (value: ReadingFont) => void update({ readingFont: value });
 
   return (
-    <details className="reading-settings">
+    <details className="reading-settings" ref={detailsRef}>
       <summary aria-label="阅读设置" title="阅读设置">Aa</summary>
       <div className="reading-settings__panel">
         <section>

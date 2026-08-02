@@ -1,5 +1,5 @@
-import { useMemo, useState } from 'react';
-import { ChevronDown, ChevronRight, FileText, Folder, FolderTree, ListTree, Trash2 } from 'lucide-react';
+import { useDeferredValue, useEffect, useMemo, useState } from 'react';
+import { ChevronDown, ChevronRight, FileText, Folder, FolderTree, ListTree, Search, Trash2, X } from 'lucide-react';
 
 import type { MarkdownHeading } from '@/features/markdown/engine/render-markdown';
 import type { DocumentRecord } from '@/shared/persistence/database';
@@ -13,6 +13,8 @@ interface FolderNode {
   folders: Map<string, FolderNode>;
   documents: DocumentRecord[];
 }
+
+const FILE_RENDER_BATCH = 250;
 
 function documentPath(document: DocumentRecord): string[] {
   if (document.source !== 'file') return [document.title];
@@ -117,7 +119,23 @@ export function DocumentRail({
 }) {
   const [filesOpen, setFilesOpen] = useState(true);
   const [outlineOpen, setOutlineOpen] = useState(true);
-  const tree = useMemo(() => buildTree(documents), [documents]);
+  const [fileQuery, setFileQuery] = useState('');
+  const [visibleFileLimit, setVisibleFileLimit] = useState(FILE_RENDER_BATCH);
+  const deferredFileQuery = useDeferredValue(fileQuery.trim().toLocaleLowerCase());
+  const filteredDocuments = useMemo(() => {
+    if (!deferredFileQuery) return documents;
+    return documents.filter((document) => documentPath(document).join('/').toLocaleLowerCase().includes(deferredFileQuery));
+  }, [deferredFileQuery, documents]);
+  useEffect(() => setVisibleFileLimit(FILE_RENDER_BATCH), [deferredFileQuery, documents.length]);
+  useEffect(() => {
+    if (!activeId) return;
+    const activeIndex = filteredDocuments.findIndex((document) => document.id === activeId);
+    if (activeIndex >= visibleFileLimit) {
+      setVisibleFileLimit(Math.ceil((activeIndex + 1) / FILE_RENDER_BATCH) * FILE_RENDER_BATCH);
+    }
+  }, [activeId, filteredDocuments, visibleFileLimit]);
+  const visibleDocuments = useMemo(() => filteredDocuments.slice(0, visibleFileLimit), [filteredDocuments, visibleFileLimit]);
+  const tree = useMemo(() => buildTree(visibleDocuments), [visibleDocuments]);
 
   return (
     <aside className="document-rail">
@@ -128,9 +146,20 @@ export function DocumentRail({
           <strong>文件</strong>
           <span>{documents.length}</span>
         </button>
-        {filesOpen ? <div className="document-rail__section-body document-tree">
-          {documents.length > 0 ? <FolderBranch activeId={activeId} depth={0} node={tree} onOpen={onOpen} onRemove={onRemove} /> : <p className="document-rail__empty">打开的文件会列在这里。</p>}
-        </div> : null}
+        {filesOpen ? <>
+          {documents.length > 0 ? <label className="document-search">
+            <Search aria-hidden="true" size={14} />
+            <span className="sr-only">搜索文件</span>
+            <input onChange={(event) => setFileQuery(event.target.value)} placeholder="搜索文件" type="search" value={fileQuery} />
+            {fileQuery ? <button aria-label="清空文件搜索" onClick={() => setFileQuery('')} type="button"><X aria-hidden="true" size={13} /></button> : null}
+          </label> : null}
+          <div className="document-rail__section-body document-tree">
+            {filteredDocuments.length > 0 ? <>
+              <FolderBranch activeId={activeId} depth={0} node={tree} onOpen={onOpen} onRemove={onRemove} />
+              {visibleDocuments.length < filteredDocuments.length ? <button className="document-tree__more" onClick={() => setVisibleFileLimit((value) => value + FILE_RENDER_BATCH)} type="button">显示更多文件（{visibleDocuments.length}/{filteredDocuments.length}）</button> : null}
+            </> : <p className="document-rail__empty">{documents.length > 0 ? `没有找到“${fileQuery.trim()}”` : '打开的文件会列在这里。'}</p>}
+          </div>
+        </> : null}
       </section>
 
       <section className={`document-rail__section document-rail__section--outline ${outlineOpen ? '' : 'document-rail__section--collapsed'}`}>

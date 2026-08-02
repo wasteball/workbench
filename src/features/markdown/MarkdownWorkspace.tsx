@@ -29,6 +29,7 @@ import {
 } from 'lucide-react';
 
 import { useDestination } from '@/app/destination-context';
+import { useSettings } from '@/app/settings-context';
 import { ChangeReviewPanel } from '@/features/markdown/components/ChangeReviewPanel';
 import { DocumentRail } from '@/features/markdown/components/DocumentRail';
 import { FindReplaceBar } from '@/features/markdown/components/FindReplaceBar';
@@ -45,6 +46,8 @@ import {
   type ReviewChange,
 } from '@/features/markdown/engine/review-changes';
 import { getExporter } from '@/features/markdown/exporters/registry';
+import type { ExportFormat } from '@/features/markdown/exporters/contract';
+import { safeFileName } from '@/features/markdown/exporters/file-name';
 import { MarkdownPreview, type MarkdownPreviewHandle } from '@/features/markdown/components/MarkdownPreview';
 import { toggleTask } from '@/features/markdown/engine/toggle-task';
 import { OpenDocumentDialog } from '@/features/markdown/components/OpenDocumentDialog';
@@ -56,7 +59,9 @@ import {
   markdownFilesFromDataTransfer,
   pickMarkdownDirectory,
   pickMarkdownFiles,
+  pickMarkdownSaveFile,
   resolvePickedMarkdownFile,
+  writeMarkdownFile,
   type PickedMarkdownFile,
 } from '@/platform/files/file-picker';
 import type { DocumentRecord } from '@/shared/persistence/database';
@@ -81,6 +86,12 @@ const EMPTY_RENDER: MarkdownRenderResult = {
   blocks: [],
   wordCount: 0,
   readingMinutes: 1,
+};
+
+const EXPORT_LABELS: Record<ExportFormat, string> = {
+  html: 'HTML',
+  docx: 'Word',
+  markdown: 'Markdown',
 };
 
 interface SessionDocument {
@@ -108,6 +119,7 @@ function destinationCopy(record: DocumentRecord, hasUnsavedChanges: boolean) {
 
 export function MarkdownWorkspace({ route, navigate }: PageProps) {
   const { setDestination } = useDestination();
+  const { settings, update: updateSettings } = useSettings();
   const [documents, setDocuments] = useState<DocumentRecord[]>([]);
   const [active, setActive] = useState<LoadedDocument | null>(null);
   const [content, setContent] = useState('');
@@ -133,11 +145,15 @@ export function MarkdownWorkspace({ route, navigate }: PageProps) {
   const [activeHeadingId, setActiveHeadingId] = useState('');
   const [status, setStatus] = useState('');
   const [exporting, setExporting] = useState(false);
+  const [toast, setToast] = useState<{ id: number; message: string; kind: 'info' | 'success' | 'error' } | null>(null);
   const editorView = useRef<EditorView | null>(null);
   const markdownPreview = useRef<MarkdownPreviewHandle>(null);
   const contentRef = useRef('');
   const previewPane = useRef<HTMLDivElement>(null);
   const openMenu = useRef<HTMLDetailsElement>(null);
+  const exportMenu = useRef<HTMLDetailsElement>(null);
+  const reviewControl = useRef<HTMLDivElement>(null);
+  const toastTimer = useRef<number | null>(null);
   const dragDepth = useRef(0);
   const edgeScrollTimer = useRef<number | null>(null);
   const sessionDocuments = useRef(new Map<string, SessionDocument>());
@@ -147,6 +163,15 @@ export function MarkdownWorkspace({ route, navigate }: PageProps) {
   const handledRoute = useRef('');
   const lastPersistedSnapshot = useRef('');
   const openSequence = useRef(0);
+
+  const notify = useCallback((message: string, kind: 'info' | 'success' | 'error' = 'info') => {
+    if (toastTimer.current !== null) window.clearTimeout(toastTimer.current);
+    setToast({ id: Date.now(), message, kind });
+    toastTimer.current = window.setTimeout(() => {
+      toastTimer.current = null;
+      setToast(null);
+    }, 3_200);
+  }, []);
 
   const refreshDocuments = useCallback(async () => {
     setDocuments(await documentService.recent(2_000));
@@ -188,6 +213,31 @@ export function MarkdownWorkspace({ route, navigate }: PageProps) {
     media.addEventListener('change', handleViewportChange);
     return () => media.removeEventListener('change', handleViewportChange);
   }, []);
+
+  useEffect(() => () => {
+    if (toastTimer.current !== null) window.clearTimeout(toastTimer.current);
+  }, []);
+
+  useEffect(() => {
+    const closeOutside = (event: PointerEvent) => {
+      const target = event.target as Node;
+      if (openMenu.current?.open && !openMenu.current.contains(target)) openMenu.current.removeAttribute('open');
+      if (exportMenu.current?.open && !exportMenu.current.contains(target)) exportMenu.current.removeAttribute('open');
+      if (reviewOpen && reviewControl.current && !reviewControl.current.contains(target)) setReviewOpen(false);
+    };
+    const closeOnEscape = (event: KeyboardEvent) => {
+      if (event.key !== 'Escape') return;
+      openMenu.current?.removeAttribute('open');
+      exportMenu.current?.removeAttribute('open');
+      if (reviewOpen) setReviewOpen(false);
+    };
+    document.addEventListener('pointerdown', closeOutside, true);
+    document.addEventListener('keydown', closeOnEscape);
+    return () => {
+      document.removeEventListener('pointerdown', closeOutside, true);
+      document.removeEventListener('keydown', closeOnEscape);
+    };
+  }, [reviewOpen]);
 
   const openRecord = useCallback(async (record: DocumentRecord) => {
     markdownPreview.current?.commitActiveEdit();
@@ -437,43 +487,59 @@ export function MarkdownWorkspace({ route, navigate }: PageProps) {
     markdownPreview.current?.commitActiveEdit();
     const currentContent = contentRef.current;
     setStatus('正在保存…');
-    const handle = active.record.fileHandle;
-    if (handle) {
-      try {
-        const permissionHandle = handle as FileSystemFileHandle & {
-          requestPermission?: (options: { mode: 'readwrite' }) => Promise<PermissionState>;
-        };
-        if (permissionHandle.requestPermission) {
-          const permission = await permissionHandle.requestPermission({ mode: 'readwrite' });
-          if (permission !== 'granted') throw new Error('没有获得原文件写入权限。');
+    let handle = active.record.fileHandle;
+    let attachedNewHandle = false;
+    try {
+      if (!handle) {
+        const selected = await pickMarkdownSaveFile(safeFileName(title, 'md'));
+        if (selected === null) {
+          setStatus('已取消保存，文件没有改动。');
+          notify('已取消保存，原文件没有改动。');
+          return;
         }
-        const writable = await handle.createWritable();
-        await writable.write(currentContent);
-        await writable.close();
-        await documentService.markSavedOriginal(active.record.id);
-        const record = await documentService.read(active.record.id);
-        if (record) setActive({ record, content: currentContent, baseline: currentContent, needsSource: false });
-        setBaseline(currentContent);
-        sessionDocuments.current.set(active.record.id, { content: currentContent, baseline: currentContent });
-        setDestination({ kind: 'original-file', label: title, detail: '已写回原文件' });
-        setStatus('已写回原文件。');
-        return;
-      } catch (error) {
-        setStatus(error instanceof Error ? `${error.message} 已改为下载副本。` : '无法写回原文件，已改为下载副本。');
+        if (selected === undefined) {
+          const result = await (await getExporter('markdown')).export({ markdown: currentContent, title });
+          downloadBlob(result.blob, result.fileName);
+          await documentService.markDownloaded(active.record.id, currentContent);
+          const record = await documentService.read(active.record.id);
+          if (record) setActive({ record, content: currentContent, baseline: currentContent, needsSource: false });
+          setBaseline(currentContent);
+          sessionDocuments.current.set(active.record.id, { content: currentContent, baseline: currentContent });
+          setDestination({ kind: 'downloaded-copy', label: title, detail: '浏览器不支持原地保存，已下载副本' });
+          setStatus('当前浏览器不支持原地保存，已下载 Markdown 副本。');
+          notify('浏览器不支持原地保存，已下载一个 Markdown 副本。', 'info');
+          return;
+        }
+        handle = selected;
+        attachedNewHandle = true;
       }
+
+      const saved = await writeMarkdownFile(handle, currentContent);
+      if (!saved) {
+        setStatus('已取消保存，原文件没有改动。');
+        notify('未获得写入权限，原文件没有改动。', 'info');
+        return;
+      }
+      if (attachedNewHandle) await documentService.attachSavedFile(active.record.id, handle, title);
+      await documentService.markSavedOriginal(active.record.id, title);
+      const record = await documentService.read(active.record.id);
+      if (record) {
+        setActive({ record, content: currentContent, baseline: currentContent, needsSource: false });
+        setDocuments((current) => current.map((item) => item.id === record.id ? record : item));
+      }
+      setBaseline(currentContent);
+      sessionDocuments.current.set(active.record.id, { content: currentContent, baseline: currentContent });
+      setDestination({ kind: 'original-file', label: handle.name || title, detail: '已写回原文件' });
+      setStatus('已写回原文件。');
+      notify(`已保存到原文件：${handle.name || title}`, 'success');
+    } catch (error) {
+      const message = error instanceof Error ? error.message : '无法写回原文件。';
+      setStatus(`保存失败：${message}`);
+      notify(`保存失败：${message}`, 'error');
     }
-    const result = await (await getExporter('markdown')).export({ markdown: currentContent, title });
-    downloadBlob(result.blob, result.fileName);
-    await documentService.markDownloaded(active.record.id, currentContent);
-    const record = await documentService.read(active.record.id);
-    if (record) setActive({ record, content: currentContent, baseline: currentContent, needsSource: false });
-    setBaseline(currentContent);
-    sessionDocuments.current.set(active.record.id, { content: currentContent, baseline: currentContent });
-    setDestination({ kind: 'downloaded-copy', label: title, detail: '已下载一个本地副本' });
-    setStatus('已下载 Markdown 副本。');
   };
 
-  const exportCurrent = async (format: 'markdown' | 'html' | 'docx') => {
+  const exportCurrent = async (format: ExportFormat) => {
     if (!active || active.needsSource) return;
     markdownPreview.current?.commitActiveEdit();
     const currentContent = contentRef.current;
@@ -483,30 +549,74 @@ export function MarkdownWorkspace({ route, navigate }: PageProps) {
       const result = await (await getExporter(format)).export({ markdown: currentContent, title });
       downloadBlob(result.blob, result.fileName);
       setStatus(`已下载 ${result.fileName}。`);
+      notify(`已导出 ${result.fileName}`, 'success');
     } catch (error) {
-      setStatus(error instanceof Error ? error.message : '导出失败。');
+      const message = error instanceof Error ? error.message : '导出失败。';
+      setStatus(message);
+      notify(message, 'error');
     } finally {
       setExporting(false);
     }
   };
 
+  const chooseExportFormat = async (format: ExportFormat) => {
+    exportMenu.current?.removeAttribute('open');
+    if (settings.defaultExportFormat !== format) await updateSettings({ defaultExportFormat: format });
+    await exportCurrent(format);
+  };
+
   const copyHtml = async () => {
     markdownPreview.current?.commitActiveEdit();
     const currentContent = contentRef.current;
-    const result = await renderMarkdown(currentContent);
     try {
+      const exported = await (await getExporter('html')).export({ markdown: currentContent, title });
+      const html = await exported.blob.text();
       if (navigator.clipboard.write && typeof ClipboardItem !== 'undefined') {
         await navigator.clipboard.write([new ClipboardItem({
-          'text/html': new Blob([result.html], { type: 'text/html' }),
+          'text/html': new Blob([html], { type: 'text/html' }),
           'text/plain': new Blob([currentContent], { type: 'text/plain' }),
         })]);
       } else {
-        await navigator.clipboard.writeText(result.html);
+        await navigator.clipboard.writeText(html);
       }
       setStatus('正文 HTML 已复制。');
+      notify('HTML 已复制，图表已包含在内。', 'success');
     } catch {
       setStatus('浏览器未允许写入剪贴板。');
+      notify('浏览器未允许复制 HTML。', 'error');
     }
+  };
+
+  const printCurrent = async () => {
+    if (!active || active.needsSource) return;
+    markdownPreview.current?.commitActiveEdit();
+    setMode('read');
+    setStatus('正在准备打印内容…');
+    notify('正在准备图表和分页…');
+    await new Promise<void>((resolve) => window.requestAnimationFrame(() => window.requestAnimationFrame(() => resolve())));
+
+    const pane = previewPane.current;
+    const startedAt = Date.now();
+    while (pane?.querySelector('pre:not([data-render-error]) > code.language-mermaid') && Date.now() - startedAt < 10_000) {
+      await new Promise((resolve) => window.setTimeout(resolve, 100));
+    }
+
+    const details = [...(pane?.querySelectorAll<HTMLDetailsElement>('details') ?? [])];
+    const detailStates = details.map((element) => element.open);
+    details.forEach((element) => { element.open = true; });
+    document.documentElement.classList.add('workbench-printing');
+    let restored = false;
+    const restore = () => {
+      if (restored) return;
+      restored = true;
+      document.documentElement.classList.remove('workbench-printing');
+      details.forEach((element, index) => { element.open = detailStates[index] ?? false; });
+      setStatus('打印窗口已关闭。');
+    };
+    window.addEventListener('afterprint', restore, { once: true });
+    setStatus('已准备好，可在打印窗口中选择“另存为 PDF”。');
+    window.print();
+    window.setTimeout(restore, 2_000);
   };
 
   const shareCurrent = async () => {
@@ -555,9 +665,11 @@ export function MarkdownWorkspace({ route, navigate }: PageProps) {
 
   const openFindPanel = useCallback((withReplace = false) => {
     if (!active) return;
+    const previewSelection = currentPreviewSelection();
+    if (previewSelection) selectedPreviewText.current = previewSelection;
     markdownPreview.current?.commitActiveEdit();
     const view = mode === 'source' && editorView.current?.dom.isConnected ? editorView.current : null;
-    let selected = currentPreviewSelection() || selectedPreviewText.current;
+    let selected = previewSelection || currentPreviewSelection() || selectedPreviewText.current;
     if (view) {
       const selection = view.state.selection.main;
       if (selection.from !== selection.to) selected = view.state.sliceDoc(selection.from, selection.to);
@@ -600,16 +712,28 @@ export function MarkdownWorkspace({ route, navigate }: PageProps) {
   const replaceCurrentMatch = () => {
     const match = findMatches[findIndex];
     if (!match) return;
-    applyContent(replaceTextMatch(contentRef.current, match, replacement));
+    const next = replaceTextMatch(contentRef.current, match, replacement);
+    if (next === contentRef.current) {
+      notify('查找内容和替换内容相同，没有修改。');
+      return;
+    }
+    applyContent(next);
     setStatus('已替换 1 处。');
+    notify('已替换 1 处，可用撤销恢复。', 'success');
   };
 
   const replaceEveryMatch = () => {
     if (findMatches.length === 0) return;
     const count = findMatches.length;
-    applyContent(replaceAllTextMatches(contentRef.current, findMatches, replacement));
+    const next = replaceAllTextMatches(contentRef.current, findMatches, replacement);
+    if (next === contentRef.current) {
+      notify('查找内容和替换内容相同，没有修改。');
+      return;
+    }
+    applyContent(next);
     setFindIndex(0);
     setStatus(`已替换 ${count} 处。`);
+    notify(`已替换 ${count} 处，可用撤销恢复。`, 'success');
   };
 
   const selectReviewChange = useCallback((index: number) => {
@@ -755,7 +879,10 @@ export function MarkdownWorkspace({ route, navigate }: PageProps) {
       onMouseDownCapture={(event) => {
         const target = event.target as Element;
         if (target.closest('button')?.getAttribute('aria-label') === '撤销') return;
-        if (!previewPane.current?.contains(target)) markdownPreview.current?.commitActiveEdit();
+        if (!previewPane.current?.contains(target)) {
+          rememberPreviewSelection();
+          markdownPreview.current?.commitActiveEdit();
+        }
       }}
       onDragEnter={(event) => {
         if (!Array.from(event.dataTransfer.types).includes('Files')) return;
@@ -840,8 +967,17 @@ export function MarkdownWorkspace({ route, navigate }: PageProps) {
           />
           {mode !== 'read' ? <IconButton active={mode === 'source'} disabled={!active} icon={Code2} label={mode === 'source' ? '返回正文编辑' : '编辑 Markdown 源文件（高级）'} onClick={() => { markdownPreview.current?.commitActiveEdit(); setMode((current) => current === 'source' ? 'edit' : 'source'); }} /> : null}
           <IconButton active={findOpen} disabled={!active} icon={Search} label="查找和替换" onClick={() => openFindPanel(false)} />
-          <div className="change-review-control">
-            <Button className={reviewOpen ? 'review-toggle review-toggle--active' : 'review-toggle'} disabled={!active || active.needsSource} icon={FileDiff} onClick={() => { markdownPreview.current?.commitActiveEdit(); setReviewOpen((value) => !value); }} size="small">{reviewChanges.length > 0 ? `改动 ${reviewChanges.length}` : '改动'}</Button>
+          <div className="change-review-control" ref={reviewControl}>
+            <Button className={reviewOpen ? 'review-toggle review-toggle--active' : 'review-toggle'} disabled={!active || active.needsSource} icon={FileDiff} onClick={() => {
+              markdownPreview.current?.commitActiveEdit();
+              setReviewOpen((value) => {
+                if (!value && reviewChanges.length > 0) {
+                  setReviewShowAll(false);
+                  setReviewInlineOpen(true);
+                }
+                return !value;
+              });
+            }} size="small">{reviewChanges.length > 0 ? `改动 ${reviewChanges.length}` : '改动'}</Button>
             {active && !active.needsSource && reviewOpen ? (
               <ChangeReviewPanel
                 changes={reviewChanges}
@@ -852,10 +988,12 @@ export function MarkdownWorkspace({ route, navigate }: PageProps) {
                 onRevertAll={revertAllChanges}
                 onSave={() => void saveCurrent()}
                 onSelect={selectReviewChange}
-                onShowAllChange={(value) => { setReviewShowAll(value); setReviewInlineOpen(value); }}
                 onShowMarksChange={setReviewShowMarks}
                 onStep={stepReview}
+                onViewAll={() => { setReviewShowAll(true); setReviewInlineOpen(true); }}
+                onViewCurrent={() => { setReviewShowAll(false); setReviewInlineOpen(true); }}
                 showAll={reviewShowAll}
+                showCurrent={reviewInlineOpen}
                 showMarks={reviewShowMarks}
               />
             ) : null}
@@ -864,16 +1002,19 @@ export function MarkdownWorkspace({ route, navigate }: PageProps) {
 
         <div className="markdown-toolbar__group markdown-toolbar__output-actions">
           <IconButton className="output-action--optional" disabled={!active?.content && !content} icon={Copy} label="复制 HTML" onClick={() => void copyHtml()} />
-          <IconButton className="output-action--optional" disabled={!active || active.needsSource} icon={Printer} label="打印或另存 PDF" onClick={() => { markdownPreview.current?.commitActiveEdit(); setMode('read'); window.setTimeout(() => window.print(), 240); }} />
+          <IconButton className="output-action--optional" disabled={!active || active.needsSource} icon={Printer} label="打印或另存 PDF" onClick={() => void printCurrent()} />
           <ReadingSettingsPanel />
-          <details className="export-menu">
-            <summary aria-label="导出文档"><Download aria-hidden="true" size={17} /><span>导出</span></summary>
-            <div className="export-menu__panel">
-              <button disabled={exporting || !active} onClick={() => void exportCurrent('html')} type="button"><strong>HTML 网页</strong><small>可独立打开的本地网页</small></button>
-              <button disabled={exporting || !active} onClick={() => void exportCurrent('docx')} type="button"><strong>Word 文档</strong><small>可继续编辑的 DOCX</small></button>
-              <button disabled={exporting || !active} onClick={() => void exportCurrent('markdown')} type="button"><strong>Markdown</strong><small>保留原始文本</small></button>
-            </div>
-          </details>
+          <div className="export-control">
+            <Button className="export-control__primary" disabled={exporting || !active || active.needsSource} icon={Download} onClick={() => void exportCurrent(settings.defaultExportFormat)} size="small">导出 {EXPORT_LABELS[settings.defaultExportFormat]}</Button>
+            <details className="export-menu" ref={exportMenu}>
+              <summary aria-label="选择导出格式" title="选择导出格式"><ChevronDown aria-hidden="true" size={15} /></summary>
+              <div className="export-menu__panel">
+                <button aria-current={settings.defaultExportFormat === 'html' ? 'true' : undefined} disabled={exporting || !active} onClick={() => void chooseExportFormat('html')} type="button"><strong>HTML 网页</strong><small>可独立打开的本地网页</small></button>
+                <button aria-current={settings.defaultExportFormat === 'docx' ? 'true' : undefined} disabled={exporting || !active} onClick={() => void chooseExportFormat('docx')} type="button"><strong>Word 文档</strong><small>可继续编辑的 DOCX</small></button>
+                <button aria-current={settings.defaultExportFormat === 'markdown' ? 'true' : undefined} disabled={exporting || !active} onClick={() => void chooseExportFormat('markdown')} type="button"><strong>Markdown</strong><small>保留原始文本</small></button>
+              </div>
+            </details>
+          </div>
           <Button disabled={!active || active.needsSource} icon={Save} onClick={() => void saveCurrent()} size="small">保存</Button>
           <Button disabled={!active || active.needsSource} icon={Share2} onClick={() => void shareCurrent()} size="small" variant="primary">分享</Button>
         </div>
@@ -953,6 +1094,7 @@ export function MarkdownWorkspace({ route, navigate }: PageProps) {
                   html={rendered.html}
                   markdown={content}
                   onMarkdownChange={applyContent}
+                  onNotify={notify}
                   onTaskToggle={handleTaskToggle}
                   ref={markdownPreview}
                   review={previewReview}
@@ -989,6 +1131,8 @@ export function MarkdownWorkspace({ route, navigate }: PageProps) {
       </footer>
 
       {dragActive ? <div aria-hidden="true" className="workspace-drop-overlay"><FileText size={34} /><strong>松开即可打开</strong><span>支持 Markdown 文件或文件夹</span></div> : null}
+
+      {toast ? <div className={`workspace-toast workspace-toast--${toast.kind}`} key={toast.id} role={toast.kind === 'error' ? 'alert' : 'status'}>{toast.message}</div> : null}
 
       <OpenDocumentDialog onClose={() => setOpenDialog(null)} onFiles={importFiles} onUrl={importUrl} open={openDialog !== null} sourceMode={openDialog ?? 'all'} />
     </div>

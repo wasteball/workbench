@@ -11,6 +11,8 @@ import remarkParse from 'remark-parse';
 import remarkRehype from 'remark-rehype';
 import { unified } from 'unified';
 
+import { applyContentAwareColumnWidths } from '@/features/markdown/engine/table-column-widths';
+
 export interface MarkdownHeading {
   id: string;
   text: string;
@@ -101,11 +103,8 @@ export async function renderMarkdown(markdown: string): Promise<MarkdownRenderRe
   if (!main) return { html: '', headings: [], blocks: [], wordCount: 0, readingMinutes: 1 };
 
   const blocks: MarkdownBlock[] = [];
-  for (const element of [...main.children]) {
-    const annotation = element.hasAttribute('data-markdown-block')
-      ? element
-      : element.querySelector<HTMLElement>('[data-markdown-block]');
-    if (!annotation) continue;
+  const annotations = [...main.querySelectorAll<HTMLElement>('[data-markdown-block]')];
+  for (const annotation of annotations) {
     const indexValue = annotation.getAttribute('data-markdown-block');
     const fromValue = annotation.getAttribute('data-source-from');
     const toValue = annotation.getAttribute('data-source-to');
@@ -115,6 +114,7 @@ export async function renderMarkdown(markdown: string): Promise<MarkdownRenderRe
     const to = Number(toValue);
     if (!Number.isInteger(index) || !Number.isFinite(from) || !Number.isFinite(to)) continue;
     const type = annotation.getAttribute('data-block-type') || 'paragraph';
+    const target = annotation.parentElement?.tagName === 'PRE' ? annotation.parentElement : annotation;
     const wrapper = document.createElement('div');
     wrapper.className = 'markdown-block';
     wrapper.dataset.blockIndex = String(index);
@@ -125,8 +125,8 @@ export async function renderMarkdown(markdown: string): Promise<MarkdownRenderRe
     annotation.removeAttribute('data-block-type');
     annotation.removeAttribute('data-source-from');
     annotation.removeAttribute('data-source-to');
-    element.replaceWith(wrapper);
-    wrapper.append(element);
+    target.replaceWith(wrapper);
+    wrapper.append(target);
     blocks.push({ index, type, from, to, raw: markdown.slice(from, to) });
   }
 
@@ -151,6 +151,7 @@ export async function renderMarkdown(markdown: string): Promise<MarkdownRenderRe
     image.loading = 'lazy';
     image.decoding = 'async';
   });
+  main.querySelectorAll<HTMLTableElement>('table').forEach(applyContentAwareColumnWidths);
 
   const wordCount = countWords(markdown);
   return {
