@@ -15,7 +15,7 @@ Full license and notice texts found in installed packages are collected in `THIR
 | Apache-2.0 | 2 |
 | BlueOak-1.0.0 | 1 |
 | BSD-2-Clause | 1 |
-| BSD-3-Clause | 9 |
+| BSD-3-Clause | 10 |
 | ISC | 41 |
 | MIT | 301 |
 | MIT OR Apache2 | 1 |
@@ -173,6 +173,7 @@ Full license and notice texts found in installed packages are collected in `THIR
 | destroy | 1.2.0 | MIT | no | [link](https://github.com/stream-utils/destroy) |
 | devlop | 1.1.0 | MIT | no | [link](https://github.com/wooorm/devlop) |
 | dexie | 4.4.4 | Apache-2.0 | yes | [link](https://dexie.org) |
+| diff | 8.0.2 | BSD-3-Clause | yes | [link](https://github.com/kpdecker/jsdiff) |
 | digest-header | 1.1.0 | MIT | no | [link](https://github.com/node-modules/digest-header) |
 | docx | 9.7.1 | MIT | yes | [link](https://docx.js.org) |
 | dompurify | 3.4.12 | (MPL-2.0 OR Apache-2.0) | yes | [link](https://github.com/cure53/DOMPurify) |

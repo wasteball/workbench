@@ -14,14 +14,14 @@ Workbench 是一个在浏览器里使用的文档工作台。你可以直接打�
 | Edge | 商店版准备中 |
 | Safari | 商店版准备中 |
 
-当前发布的 `0.1.1` 是商店上线前的公开预览版。Chrome 和 Edge 用户可以[下载预览版](https://github.com/wasteball/workbench/releases/tag/v0.1.1)，按照页面中的安装说明提前体验。Safari 暂未提供普通用户可安装的版本。
+当前发布的 `0.1.2` 是商店上线前的公开预览版。Chrome 和 Edge 用户可以[下载预览版](https://github.com/wasteball/workbench/releases/tag/v0.1.2)，按照页面中的安装说明提前体验。Safari 暂未提供普通用户可安装的版本。
 
 <details>
 <summary>安装 Chrome / Edge 公开预览版</summary>
 
 预览版尚未进入浏览器商店，因此需要手动加载一次：
 
-1. 在[发布页面](https://github.com/wasteball/workbench/releases/tag/v0.1.1)下载对应浏览器的 ZIP 文件。
+1. 在[发布页面](https://github.com/wasteball/workbench/releases/tag/v0.1.2)下载对应浏览器的 ZIP 文件。
 2. 右键 ZIP 文件并选择“全部解压”。
 3. Chrome 在地址栏打开 `chrome://extensions`；Edge 打开 `edge://extensions`。
 4. 开启页面上的“开发者模式”。
@@ -80,7 +80,7 @@ Workbench 是一个在浏览器里使用的文档工作台。你可以直接打�
 
 ## 当前版本说明
 
-`0.1.1` 是当前公开预览版。Chrome 和 Edge 已生成可安装的预览包；Safari 仍需完成商店打包、签名和真机验收。尚未迁移的旧版能力记录在[功能迁移矩阵](docs/feature-migration.md)中。
+`0.1.2` 是当前公开预览版。Chrome 和 Edge 已生成可安装的预览包；Safari 仍需完成商店打包、签名和真机验收。尚未迁移的旧版能力记录在[功能迁移矩阵](docs/feature-migration.md)中。
 
 发现问题可以提交 [GitHub Issue](https://github.com/wasteball/workbench/issues)。安全问题请按[安全策略](SECURITY.md)私下报告。
 
