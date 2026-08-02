@@ -12,6 +12,7 @@ const SETTINGS_KEY = 'workbench:settings:v1';
 const SESSION_SECRETS_KEY = 'workbench:session-secrets:v1';
 
 let memorySessionSecrets: SessionSecrets = {};
+let patchQueue: Promise<void> = Promise.resolve();
 
 function mergeDefaults(value: unknown): AppSettings {
   const candidate = {
@@ -80,9 +81,13 @@ export const settingsService = {
   },
 
   async patch(patch: Partial<AppSettings>): Promise<AppSettings> {
-    const next = mergeDefaults({ ...(await this.read()), ...patch });
-    await this.write(next);
-    return next;
+    const operation = patchQueue.then(async () => {
+      const next = mergeDefaults({ ...(await this.read()), ...patch });
+      await this.write(next);
+      return next;
+    });
+    patchQueue = operation.then(() => undefined, () => undefined);
+    return operation;
   },
 
   async reset(): Promise<AppSettings> {

@@ -14,14 +14,14 @@ Workbench 是一个在浏览器里使用的文档工作台。你可以直接打�
 | Edge | 商店版准备中 |
 | Safari | 商店版准备中 |
 
-当前发布的 `0.1.2` 是商店上线前的公开预览版。Chrome 和 Edge 用户可以[下载预览版](https://github.com/wasteball/workbench/releases/tag/v0.1.2)，按照页面中的安装说明提前体验。Safari 暂未提供普通用户可安装的版本。
+当前发布的 `0.1.3` 是商店上线前的公开预览版。Chrome 和 Edge 用户可以[下载预览版](https://github.com/wasteball/workbench/releases/tag/v0.1.3)，按照页面中的安装说明提前体验。Safari 暂未提供普通用户可安装的版本。
 
 <details>
 <summary>安装 Chrome / Edge 公开预览版</summary>
 
 预览版尚未进入浏览器商店，因此需要手动加载一次：
 
-1. 在[发布页面](https://github.com/wasteball/workbench/releases/tag/v0.1.2)下载对应浏览器的 ZIP 文件。
+1. 在[发布页面](https://github.com/wasteball/workbench/releases/tag/v0.1.3)下载对应浏览器的 ZIP 文件。
 2. 右键 ZIP 文件并选择“全部解压”。
 3. Chrome 在地址栏打开 `chrome://extensions`；Edge 打开 `edge://extensions`。
 4. 开启页面上的“开发者模式”。
@@ -47,8 +47,11 @@ Workbench 是一个在浏览器里使用的文档工作台。你可以直接打�
 
 - **打开文档**：从电脑选择一个或多个 Markdown 文件，也可以直接打开整个文件夹。
 - **新建与编辑**：新建文档并持续编辑，意外关闭后可以恢复尚未导出的草稿。
-- **三种查看方式**：在编辑、左右分屏和阅读模式之间切换。
+- **阅读与直接编辑**：默认显示排版后的正文；需要修改时直接编辑正文，高级用户也可以打开整篇 Markdown 源文件。
 - **丰富内容显示**：正确显示表格、待办事项、代码、数学公式和流程图。
+- **文件与目录导航**：在左侧切换文件，并通过文档目录快速定位当前标题。
+- **查找、替换与审阅**：查找选中文字、替换当前项或全部结果，并逐项查看或撤回未保存改动。
+- **阅读偏好**：调整正文字体、字号、版心宽度和界面颜色。
 - **多种导出格式**：导出为 Markdown、独立网页或可继续编辑的 Word 文档，也可保存为 PDF。
 - **从网址打开**：读取公开的 Markdown 网址、GitHub 文件页和 Gist 内容。
 
@@ -80,7 +83,7 @@ Workbench 是一个在浏览器里使用的文档工作台。你可以直接打�
 
 ## 当前版本说明
 
-`0.1.2` 是当前公开预览版。Chrome 和 Edge 已生成可安装的预览包；Safari 仍需完成商店打包、签名和真机验收。尚未迁移的旧版能力记录在[功能迁移矩阵](docs/feature-migration.md)中。
+`0.1.3` 是当前公开预览版。Chrome 和 Edge 已生成可安装的预览包；Safari 仍需完成商店打包、签名和真机验收。尚未迁移的旧版能力记录在[功能迁移矩阵](docs/feature-migration.md)中。
 
 发现问题可以提交 [GitHub Issue](https://github.com/wasteball/workbench/issues)。安全问题请按[安全策略](SECURITY.md)私下报告。
 

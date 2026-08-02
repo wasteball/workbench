@@ -1,6 +1,7 @@
 export interface PickedMarkdownFile {
-  file: File;
+  file?: File;
   handle?: FileSystemFileHandle;
+  name: string;
   relativePath: string;
 }
 
@@ -16,6 +17,32 @@ const MARKDOWN_TYPES = [{
   accept: { 'text/markdown': ['.md', '.markdown'], 'text/plain': ['.txt'] },
 }];
 
+const MAX_DIRECTORY_DOCUMENTS = 2_000;
+const IGNORED_DIRECTORY_NAMES = new Set([
+  '.git',
+  '.hg',
+  '.svn',
+  '.next',
+  '.output',
+  'build',
+  'dist',
+  'node_modules',
+  'vendor',
+]);
+
+function isMarkdownName(name: string): boolean {
+  return /\.(md|markdown|txt)$/i.test(name);
+}
+
+function isIgnoredRelativePath(path: string): boolean {
+  const directories = path.split(/[\\/]+/).slice(0, -1);
+  return directories.some((name) => IGNORED_DIRECTORY_NAMES.has(name.toLocaleLowerCase()));
+}
+
+function yieldToBrowser(): Promise<void> {
+  return new Promise((resolve) => window.setTimeout(resolve, 0));
+}
+
 function inputFiles(directory = false): Promise<PickedMarkdownFile[]> {
   return new Promise((resolve) => {
     const input = document.createElement('input');
@@ -24,9 +51,14 @@ function inputFiles(directory = false): Promise<PickedMarkdownFile[]> {
     input.multiple = true;
     if (directory) input.setAttribute('webkitdirectory', '');
     input.addEventListener('change', () => {
+      const selected = [...(input.files ?? [])]
+        .filter((file) => isMarkdownName(file.name))
+        .filter((file) => !isIgnoredRelativePath(file.webkitRelativePath || file.name))
+        .slice(0, MAX_DIRECTORY_DOCUMENTS);
       resolve(
-        [...(input.files ?? [])].map((file) => ({
+        selected.map((file) => ({
           file,
+          name: file.name,
           relativePath: file.webkitRelativePath || file.name,
         })),
       );
@@ -39,14 +71,18 @@ function inputFiles(directory = false): Promise<PickedMarkdownFile[]> {
 async function readDirectory(
   directory: FileSystemDirectoryHandle,
   parentPath = '',
+  files: PickedMarkdownFile[] = [],
+  visited = { count: 0 },
 ): Promise<PickedMarkdownFile[]> {
-  const files: PickedMarkdownFile[] = [];
   for await (const [name, handle] of directory.entries()) {
+    if (files.length >= MAX_DIRECTORY_DOCUMENTS) break;
+    visited.count += 1;
+    if (visited.count % 120 === 0) await yieldToBrowser();
     const path = parentPath ? `${parentPath}/${name}` : name;
     if (handle.kind === 'directory') {
-      files.push(...await readDirectory(handle, path));
-    } else if (/\.(md|markdown|txt)$/i.test(name)) {
-      files.push({ file: await handle.getFile(), handle, relativePath: path });
+      if (!IGNORED_DIRECTORY_NAMES.has(name.toLocaleLowerCase())) await readDirectory(handle, path, files, visited);
+    } else if (isMarkdownName(name)) {
+      files.push({ handle, name, relativePath: path });
     }
   }
   return files;
@@ -77,12 +113,22 @@ function legacyFile(entry: LegacyFileEntry): Promise<File> {
   return new Promise((resolve, reject) => entry.file(resolve, reject));
 }
 
-async function readLegacyEntry(entry: LegacyEntry, parentPath = ''): Promise<PickedMarkdownFile[]> {
+async function readLegacyEntry(
+  entry: LegacyEntry,
+  parentPath = '',
+  files: PickedMarkdownFile[] = [],
+  visited = { count: 0 },
+): Promise<PickedMarkdownFile[]> {
+  if (files.length >= MAX_DIRECTORY_DOCUMENTS) return files;
+  visited.count += 1;
+  if (visited.count % 120 === 0) await yieldToBrowser();
   const path = parentPath ? `${parentPath}/${entry.name}` : entry.name;
   if (entry.isFile) {
-    if (!/\.(md|markdown|txt)$/i.test(entry.name)) return [];
-    return [{ file: await legacyFile(entry), relativePath: path }];
+    if (isMarkdownName(entry.name)) files.push({ file: await legacyFile(entry), name: entry.name, relativePath: path });
+    return files;
   }
+
+  if (IGNORED_DIRECTORY_NAMES.has(entry.name.toLocaleLowerCase())) return files;
 
   const reader = entry.createReader();
   const children: LegacyEntry[] = [];
@@ -91,7 +137,11 @@ async function readLegacyEntry(entry: LegacyEntry, parentPath = ''): Promise<Pic
     if (batch.length === 0) break;
     children.push(...batch);
   }
-  return (await Promise.all(children.map((child) => readLegacyEntry(child, path)))).flat();
+  for (const child of children) {
+    if (files.length >= MAX_DIRECTORY_DOCUMENTS) break;
+    await readLegacyEntry(child, path, files, visited);
+  }
+  return files;
 }
 
 export async function pickMarkdownFiles(): Promise<PickedMarkdownFile[]> {
@@ -99,7 +149,7 @@ export async function pickMarkdownFiles(): Promise<PickedMarkdownFile[]> {
   if (!picker) return inputFiles(false);
   try {
     const handles = await picker({ multiple: true, types: MARKDOWN_TYPES });
-    return Promise.all(handles.map(async (handle) => ({ file: await handle.getFile(), handle, relativePath: handle.name })));
+    return handles.map((handle) => ({ handle, name: handle.name, relativePath: handle.name }));
   } catch (error) {
     if (error instanceof DOMException && error.name === 'AbortError') return [];
     throw error;
@@ -134,9 +184,9 @@ export async function markdownFilesFromDataTransfer(dataTransfer: DataTransfer):
     const picked = await Promise.all(modernHandles.map(async (handle) => {
       if (!handle) return [];
       if (handle.kind === 'directory') return readDirectory(handle as FileSystemDirectoryHandle, handle.name);
-      if (!/\.(md|markdown|txt)$/i.test(handle.name)) return [];
+      if (!isMarkdownName(handle.name)) return [];
       const fileHandle = handle as FileSystemFileHandle;
-      return [{ file: await fileHandle.getFile(), handle: fileHandle, relativePath: fileHandle.name }];
+      return [{ handle: fileHandle, name: fileHandle.name, relativePath: fileHandle.name }];
     }));
     return picked.flat();
   }
@@ -146,10 +196,23 @@ export async function markdownFilesFromDataTransfer(dataTransfer: DataTransfer):
     return withEntry.webkitGetAsEntry?.() ?? null;
   });
   if (legacyEntries.some(Boolean)) {
-    return (await Promise.all(legacyEntries.map((entry) => entry ? readLegacyEntry(entry) : []))).flat();
+    const files: PickedMarkdownFile[] = [];
+    const visited = { count: 0 };
+    for (const entry of legacyEntries) {
+      if (!entry || files.length >= MAX_DIRECTORY_DOCUMENTS) continue;
+      await readLegacyEntry(entry, '', files, visited);
+    }
+    return files;
   }
 
   return [...dataTransfer.files]
-    .filter((file) => /\.(md|markdown|txt)$/i.test(file.name))
-    .map((file) => ({ file, relativePath: file.webkitRelativePath || file.name }));
+    .filter((file) => isMarkdownName(file.name) && !isIgnoredRelativePath(file.webkitRelativePath || file.name))
+    .slice(0, MAX_DIRECTORY_DOCUMENTS)
+    .map((file) => ({ file, name: file.name, relativePath: file.webkitRelativePath || file.name }));
+}
+
+export async function resolvePickedMarkdownFile(picked: PickedMarkdownFile): Promise<File> {
+  if (picked.file) return picked.file;
+  if (picked.handle) return picked.handle.getFile();
+  throw new Error(`无法读取 ${picked.name}。`);
 }

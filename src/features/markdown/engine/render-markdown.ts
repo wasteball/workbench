@@ -1,4 +1,6 @@
 import DOMPurify from 'dompurify';
+import type { Properties } from 'hast';
+import type { Root } from 'mdast';
 import rehypeHighlight from 'rehype-highlight';
 import rehypeKatex from 'rehype-katex';
 import rehypeRaw from 'rehype-raw';
@@ -15,17 +17,48 @@ export interface MarkdownHeading {
   level: number;
 }
 
+export interface MarkdownBlock {
+  index: number;
+  type: string;
+  from: number;
+  to: number;
+  raw: string;
+}
+
 export interface MarkdownRenderResult {
   html: string;
   headings: MarkdownHeading[];
+  blocks: MarkdownBlock[];
   wordCount: number;
   readingMinutes: number;
+}
+
+function remarkAnnotateBlocks() {
+  return (tree: Root) => {
+    let index = 0;
+    for (const node of tree.children) {
+      const from = node.position?.start?.offset;
+      const to = node.position?.end?.offset;
+      if (typeof from !== 'number' || typeof to !== 'number') continue;
+      node.data ??= {};
+      const data = node.data as typeof node.data & { hProperties?: Properties };
+      data.hProperties = {
+        ...data.hProperties,
+        'data-markdown-block': index,
+        'data-block-type': node.type,
+        'data-source-from': from,
+        'data-source-to': to,
+      };
+      index += 1;
+    }
+  };
 }
 
 const renderer = unified()
   .use(remarkParse)
   .use(remarkGfm)
   .use(remarkMath)
+  .use(remarkAnnotateBlocks)
   .use(remarkRehype, { allowDangerousHtml: true })
   .use(rehypeRaw)
   .use(rehypeHighlight, { detect: true })
@@ -65,7 +98,37 @@ export async function renderMarkdown(markdown: string): Promise<MarkdownRenderRe
   });
   const document = new DOMParser().parseFromString(`<main>${safe}</main>`, 'text/html');
   const main = document.querySelector('main');
-  if (!main) return { html: '', headings: [], wordCount: 0, readingMinutes: 1 };
+  if (!main) return { html: '', headings: [], blocks: [], wordCount: 0, readingMinutes: 1 };
+
+  const blocks: MarkdownBlock[] = [];
+  for (const element of [...main.children]) {
+    const annotation = element.hasAttribute('data-markdown-block')
+      ? element
+      : element.querySelector<HTMLElement>('[data-markdown-block]');
+    if (!annotation) continue;
+    const indexValue = annotation.getAttribute('data-markdown-block');
+    const fromValue = annotation.getAttribute('data-source-from');
+    const toValue = annotation.getAttribute('data-source-to');
+    if (indexValue === null || fromValue === null || toValue === null) continue;
+    const index = Number(indexValue);
+    const from = Number(fromValue);
+    const to = Number(toValue);
+    if (!Number.isInteger(index) || !Number.isFinite(from) || !Number.isFinite(to)) continue;
+    const type = annotation.getAttribute('data-block-type') || 'paragraph';
+    const wrapper = document.createElement('div');
+    wrapper.className = 'markdown-block';
+    wrapper.dataset.blockIndex = String(index);
+    wrapper.dataset.blockType = type;
+    wrapper.dataset.sourceFrom = String(from);
+    wrapper.dataset.sourceTo = String(to);
+    annotation.removeAttribute('data-markdown-block');
+    annotation.removeAttribute('data-block-type');
+    annotation.removeAttribute('data-source-from');
+    annotation.removeAttribute('data-source-to');
+    element.replaceWith(wrapper);
+    wrapper.append(element);
+    blocks.push({ index, type, from, to, raw: markdown.slice(from, to) });
+  }
 
   const headings: MarkdownHeading[] = [];
   const usedSlugs = new Set<string>();
@@ -93,6 +156,7 @@ export async function renderMarkdown(markdown: string): Promise<MarkdownRenderRe
   return {
     html: main.innerHTML,
     headings,
+    blocks,
     wordCount,
     readingMinutes: Math.max(1, Math.ceil(wordCount / 350)),
   };

@@ -18,17 +18,30 @@ describe('renderMarkdown', () => {
 $x^2$
 `);
 
-    expect(result.html).toContain('<table>');
+    expect(result.html).toContain('<table');
     expect(result.html).toContain('class="katex"');
     expect(result.html).not.toContain('<script');
     expect(result.html).not.toContain('onerror');
     expect(result.html).not.toContain('javascript:');
     expect(result.headings).toEqual([{ id: '标题', text: '标题', level: 1 }]);
+    expect(result.blocks.length).toBeGreaterThan(0);
+    expect(result.blocks[0]).toMatchObject({ index: 0, type: 'heading', from: 0 });
+    expect(result.html).toContain('class="markdown-block"');
+    expect(result.html).toContain('data-source-from="0"');
     expect(result.wordCount).toBeGreaterThan(0);
   });
 
   it('creates stable unique outline ids', async () => {
     const result = await renderMarkdown('## Same\n\n## Same\n');
     expect(result.headings.map((heading) => heading.id)).toEqual(['same', 'same-2']);
+  });
+
+  it('preserves Mermaid flowcharts for browser-side rendering', async () => {
+    const result = await renderMarkdown('```mermaid\nflowchart TD\n  A[打开文件] --> B[直接编辑]\n```\n');
+
+    expect(result.html).toContain('language-mermaid');
+    expect(result.html).toContain('flowchart TD');
+    expect(result.blocks).toHaveLength(1);
+    expect(result.blocks[0]).toMatchObject({ type: 'code', from: 0 });
   });
 });

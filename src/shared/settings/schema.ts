@@ -35,6 +35,10 @@ const aliyunProfileSchema = z.object({
 export const appSettingsSchema = z.object({
   schemaVersion: z.literal(1),
   theme: z.enum(['system', 'light', 'dark']),
+  accentColor: z.enum(['indigo', 'amber', 'blue', 'green', 'pink', 'cyan']),
+  readingFont: z.enum(['serif', 'sans']),
+  readingFontSize: z.number().int().min(14).max(26),
+  readingWidth: z.number().int().min(560).max(1200),
   menuOrder: z.array(z.string()),
   hiddenCapabilities: z.array(z.string()),
   pinnedCapabilities: z.array(z.string()),

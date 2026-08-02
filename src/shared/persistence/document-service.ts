@@ -11,6 +11,12 @@ export interface LoadedDocument {
   needsSource: boolean;
 }
 
+export interface FileRegistration {
+  name: string;
+  relativePath: string;
+  handle?: FileSystemFileHandle;
+}
+
 export function titleFromMarkdown(content: string, fallback = '未命名文档'): string {
   const heading = content.match(/^#\s+(.+)$/m)?.[1]?.trim();
   return heading?.slice(0, 120) || fallback;
@@ -66,6 +72,27 @@ export const documentService = {
     };
     await db.documents.put(record);
     return { record, content, baseline: content, needsSource: false };
+  },
+
+  async registerFiles(files: readonly FileRegistration[]): Promise<DocumentRecord[]> {
+    const now = Date.now();
+    const records = files.map((file, index): DocumentRecord => ({
+      id: nanoid(),
+      title: file.name.replace(/\.(md|markdown|txt)$/i, '') || file.name,
+      source: 'file',
+      sourceLabel: file.relativePath,
+      sourceUrl: null,
+      draftContent: null,
+      baselineContent: null,
+      ...(file.handle ? { fileHandle: file.handle } : {}),
+      createdAt: now - index,
+      updatedAt: now - index,
+      draftUpdatedAt: null,
+      lastDestination: 'original-file',
+      lastSavedAt: null,
+    }));
+    if (records.length > 0) await db.documents.bulkPut(records);
+    return records;
   },
 
   async importUrl(url: string, content: string): Promise<LoadedDocument> {

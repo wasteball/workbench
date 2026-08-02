@@ -1,5 +1,9 @@
 export type ThemePreference = 'system' | 'light' | 'dark';
 
+export type AccentColor = 'indigo' | 'amber' | 'blue' | 'green' | 'pink' | 'cyan';
+
+export type ReadingFont = 'serif' | 'sans';
+
 export type StorageProviderId = 'gateway' | 'aliyun-oss';
 
 export type AliyunCredentialMode = 'access-key' | 'sts';
@@ -55,6 +59,10 @@ export type StorageProfile = GatewayProfile | AliyunProfile;
 export interface AppSettings {
   schemaVersion: 1;
   theme: ThemePreference;
+  accentColor: AccentColor;
+  readingFont: ReadingFont;
+  readingFontSize: number;
+  readingWidth: number;
   menuOrder: string[];
   hiddenCapabilities: string[];
   pinnedCapabilities: string[];

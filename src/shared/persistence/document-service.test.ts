@@ -29,4 +29,16 @@ describe('documentService', () => {
     expect(stored?.baselineContent).toBe(original);
     expect(stored?.lastDestination).toBe('browser-draft');
   });
+
+  it('registers a folder in one metadata-only batch', async () => {
+    const records = await documentService.registerFiles([
+      { name: 'one.md', relativePath: 'notes/one.md' },
+      { name: 'two.markdown', relativePath: 'notes/two.markdown' },
+    ]);
+    const stored = await db.documents.bulkGet(records.map((record) => record.id));
+
+    expect(records.map((record) => record.title)).toEqual(['one', 'two']);
+    expect(stored.map((record) => record?.sourceLabel)).toEqual(['notes/one.md', 'notes/two.markdown']);
+    expect(stored.every((record) => record?.draftContent === null && record.baselineContent === null)).toBe(true);
+  });
 });

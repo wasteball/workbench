@@ -7,6 +7,7 @@ export function ThemeEffect() {
 
   useEffect(() => {
     const root = document.documentElement;
+    root.dataset.accent = settings.accentColor;
     const media = window.matchMedia('(prefers-color-scheme: dark)');
     const apply = () => {
       root.dataset.theme = settings.theme === 'system' ? (media.matches ? 'dark' : 'light') : settings.theme;
@@ -14,7 +15,7 @@ export function ThemeEffect() {
     apply();
     media.addEventListener('change', apply);
     return () => media.removeEventListener('change', apply);
-  }, [settings.theme]);
+  }, [settings.accentColor, settings.theme]);
 
   return null;
 }

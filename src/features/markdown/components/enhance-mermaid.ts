@@ -1,4 +1,20 @@
 import DOMPurify from 'dompurify';
+import { createElement } from 'react';
+import { createRoot } from 'react-dom/client';
+import {
+  Check,
+  Code2,
+  Copy,
+  Download,
+  Image as ImageIcon,
+  LoaderCircle,
+  Maximize2,
+  Scan,
+  X,
+  ZoomIn,
+  ZoomOut,
+  type LucideIcon,
+} from 'lucide-react';
 import mermaid from 'mermaid';
 import { nanoid } from 'nanoid';
 
@@ -8,6 +24,13 @@ interface DiagramDimensions {
   width: number;
   height: number;
 }
+
+interface DiagramTool {
+  button: HTMLButtonElement;
+  update: (label: string, icon: LucideIcon) => void;
+}
+
+let renderQueue: Promise<unknown> = Promise.resolve();
 
 function listen(
   target: EventTarget,
@@ -57,14 +80,28 @@ function dimensions(svg: SVGSVGElement): DiagramDimensions {
   return { width: rect.width || 640, height: rect.height || 360 };
 }
 
-function makeTool(label: string, text: string, action: string): HTMLButtonElement {
+function makeTool(label: string, icon: LucideIcon, action: string, cleanups: Cleanup[]): DiagramTool {
   const button = document.createElement('button');
   button.type = 'button';
   button.dataset.diagramAction = action;
-  button.setAttribute('aria-label', label);
-  button.title = label;
-  button.textContent = text;
-  return button;
+  const root = createRoot(button);
+  let active = true;
+  const update = (nextLabel: string, nextIcon: LucideIcon) => {
+    if (!active) return;
+    button.setAttribute('aria-label', nextLabel);
+    button.title = nextLabel;
+    root.render(createElement(nextIcon, {
+      'aria-hidden': true,
+      size: 17,
+      strokeWidth: 1.8,
+    }));
+  };
+  update(label, icon);
+  cleanups.push(() => {
+    active = false;
+    root.unmount();
+  });
+  return { button, update };
 }
 
 function installPanZoom(
@@ -116,10 +153,10 @@ function installPanZoom(
   };
 
   controls.append(
-    makeTool('缩小图表', '−', 'out'),
-    makeTool('放大图表', '+', 'in'),
-    makeTool('适应画布', '适', 'fit'),
-    makeTool('全屏查看', '⛶', 'fullscreen'),
+    makeTool('缩小图表', ZoomOut, 'out', cleanups).button,
+    makeTool('放大图表', ZoomIn, 'in', cleanups).button,
+    makeTool('适应画布', Scan, 'fit', cleanups).button,
+    makeTool('全屏查看', Maximize2, 'fullscreen', cleanups).button,
   );
 
   listen(controls, 'click', ((event: MouseEvent) => {
@@ -203,16 +240,16 @@ function svgToPng(svg: SVGSVGElement): Promise<Blob> {
   });
 }
 
-async function copyDiagram(svg: SVGSVGElement, button: HTMLButtonElement) {
-  const original = button.textContent;
-  button.textContent = '生成中';
+async function copyDiagram(svg: SVGSVGElement, tool: DiagramTool) {
+  tool.update('Preparing', LoaderCircle);
+  const restore = () => tool.update('Copy image', Copy);
   try {
     const blob = await svgToPng(svg);
     if (navigator.clipboard?.write && typeof ClipboardItem !== 'undefined') {
       try {
         await navigator.clipboard.write([new ClipboardItem({ 'image/png': blob })]);
-        button.textContent = '已复制';
-        window.setTimeout(() => { button.textContent = original; }, 1_400);
+        tool.update('Copied', Check);
+        window.setTimeout(restore, 1_400);
         return;
       } catch {
         // A user gesture can still be denied by browser clipboard policy.
@@ -224,11 +261,11 @@ async function copyDiagram(svg: SVGSVGElement, button: HTMLButtonElement) {
     anchor.download = 'workbench-diagram.png';
     anchor.click();
     window.setTimeout(() => URL.revokeObjectURL(url), 0);
-    button.textContent = '已下载';
+    tool.update('Downloaded', Download);
   } catch {
-    button.textContent = '复制失败';
+    tool.update('Failed', X);
   }
-  window.setTimeout(() => { button.textContent = original; }, 1_400);
+  window.setTimeout(restore, 1_400);
 }
 
 function mountDiagram(pre: HTMLElement, source: string, svgMarkup: string): Cleanup[] {
@@ -243,13 +280,9 @@ function mountDiagram(pre: HTMLElement, source: string, svgMarkup: string): Clea
   label.textContent = 'Mermaid 图表';
   const actions = document.createElement('span');
   actions.className = 'mermaid-figure__actions';
-  const viewButton = document.createElement('button');
-  viewButton.type = 'button';
-  viewButton.textContent = '查看源码';
-  const copyButton = document.createElement('button');
-  copyButton.type = 'button';
-  copyButton.textContent = '复制图片';
-  actions.append(viewButton, copyButton);
+  const viewTool = makeTool('View source', Code2, 'view-source', cleanups);
+  const copyTool = makeTool('Copy image', Copy, 'copy-image', cleanups);
+  actions.append(viewTool.button, copyTool.button);
   header.append(label, actions);
 
   const viewport = document.createElement('div');
@@ -271,26 +304,35 @@ function mountDiagram(pre: HTMLElement, source: string, svgMarkup: string): Clea
   figure.append(header, viewport, sourcePre);
   pre.replaceWith(figure);
 
-  listen(viewButton, 'click', (() => {
+  listen(viewTool.button, 'click', (() => {
     const showingDiagram = figure.dataset.view === 'diagram';
     figure.dataset.view = showingDiagram ? 'source' : 'diagram';
-    viewButton.textContent = showingDiagram ? '查看图表' : '查看源码';
+    viewTool.update(showingDiagram ? 'View image' : 'View source', showingDiagram ? ImageIcon : Code2);
   }) as EventListener, cleanups);
   if (svg) {
     installPanZoom(figure, viewport, stage, svg, controls, cleanups);
-    listen(copyButton, 'click', (() => void copyDiagram(svg, copyButton)) as EventListener, cleanups);
+    listen(copyTool.button, 'click', (() => void copyDiagram(svg, copyTool)) as EventListener, cleanups);
   } else {
     viewport.textContent = '图表无法显示，已保留源码。';
-    copyButton.disabled = true;
+    copyTool.button.disabled = true;
   }
   return cleanups;
 }
 
-function clearTemporaryNodes() {
-  document.querySelectorAll('body > div[id^="dworkbench-mermaid-"]').forEach((node) => node.remove());
+function clearTemporaryNode(id: string) {
+  document.getElementById(`d${id}`)?.remove();
+  const direct = document.getElementById(id);
+  if (direct?.parentElement === document.body) direct.remove();
 }
 
-export async function enhanceMermaidDiagrams(body: HTMLElement): Promise<Cleanup[]> {
+function queuedRender(id: string, source: string) {
+  const render = () => mermaid.render(id, source);
+  const result = renderQueue.then(render, render);
+  renderQueue = result.then(() => undefined, () => undefined);
+  return result;
+}
+
+export async function enhanceMermaidDiagrams(body: HTMLElement, signal?: AbortSignal): Promise<Cleanup[]> {
   const dark = document.documentElement.dataset.theme === 'dark';
   mermaid.initialize({
     startOnLoad: false,
@@ -307,13 +349,17 @@ export async function enhanceMermaidDiagrams(body: HTMLElement): Promise<Cleanup
     const pre = code.parentElement;
     if (!pre) continue;
     const source = code.textContent ?? '';
+    const id = `workbench-mermaid-${nanoid(8)}`;
     try {
-      const result = await mermaid.render(`workbench-mermaid-${nanoid(8)}`, prepareMermaidSource(source));
+      const result = await queuedRender(id, prepareMermaidSource(source));
+      if (signal?.aborted || !pre.isConnected) continue;
       cleanups.push(...mountDiagram(pre, source, result.svg));
     } catch (error) {
-      pre.dataset.renderError = error instanceof Error ? `图表无法渲染：${error.message}` : '图表无法渲染，已保留源码。';
+      if (!signal?.aborted && pre.isConnected) {
+        pre.dataset.renderError = error instanceof Error ? `图表无法渲染：${error.message}` : '图表无法渲染，已保留源码。';
+      }
     } finally {
-      clearTemporaryNodes();
+      clearTemporaryNode(id);
     }
   }
   return cleanups;

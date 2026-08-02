@@ -42,7 +42,11 @@ export function FindReplaceBar({
   const inputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
-    if (open) window.setTimeout(() => inputRef.current?.focus(), 0);
+    if (!open) return;
+    window.setTimeout(() => {
+      inputRef.current?.focus();
+      inputRef.current?.select();
+    }, 0);
   }, [open]);
 
   if (!open) return null;
@@ -56,8 +60,14 @@ export function FindReplaceBar({
           <input
             onChange={(event) => onQueryChange(event.target.value)}
             onKeyDown={(event) => {
-              if (event.key === 'Enter') onStep(event.shiftKey ? -1 : 1);
-              if (event.key === 'Escape') onClose();
+              if (event.key === 'Enter') {
+                event.preventDefault();
+                onStep(event.shiftKey ? -1 : 1);
+              }
+              if (event.key === 'Escape') {
+                event.preventDefault();
+                onClose();
+              }
             }}
             placeholder="查找"
             ref={inputRef}
@@ -78,8 +88,15 @@ export function FindReplaceBar({
             <input
               onChange={(event) => onReplacementChange(event.target.value)}
               onKeyDown={(event) => {
-                if (event.key === 'Enter') onReplaceOne();
-                if (event.key === 'Escape') onClose();
+                if (event.key === 'Enter') {
+                  event.preventDefault();
+                  if (event.ctrlKey || event.metaKey) onReplaceAll();
+                  else onReplaceOne();
+                }
+                if (event.key === 'Escape') {
+                  event.preventDefault();
+                  onClose();
+                }
               }}
               placeholder="替换为"
               value={replacement}

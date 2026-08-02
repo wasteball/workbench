@@ -1,6 +1,4 @@
-import { useMemo } from 'react';
-import { diffWordsWithSpace } from 'diff';
-import { ChevronDown, ChevronUp, RotateCcw, X } from 'lucide-react';
+import { ChevronsUpDown, ChevronDown, ChevronUp, RotateCcw, Save, X } from 'lucide-react';
 
 import type { ReviewChange } from '@/features/markdown/engine/review-changes';
 import { Button } from '@/shared/ui/Button';
@@ -20,17 +18,6 @@ function excerpt(value: string): string {
   return compact.length > 90 ? `${compact.slice(0, 90)}…` : compact;
 }
 
-function InlineDiff({ before, after, side }: { before: string; after: string; side: 'before' | 'after' }) {
-  const parts = useMemo(() => diffWordsWithSpace(before, after), [after, before]);
-  return parts.map((part, index) => {
-    if (side === 'before' && part.added) return null;
-    if (side === 'after' && part.removed) return null;
-    if (part.removed) return <del key={index}>{part.value}</del>;
-    if (part.added) return <ins key={index}>{part.value}</ins>;
-    return <span key={index}>{part.value}</span>;
-  });
-}
-
 export function ChangeReviewPanel({
   changes,
   current,
@@ -39,6 +26,12 @@ export function ChangeReviewPanel({
   onStep,
   onRevert,
   onRevertAll,
+  onSave,
+  showMarks,
+  showAll,
+  onShowMarksChange,
+  onShowAllChange,
+  destinationLabel,
 }: {
   changes: ReviewChange[];
   current: number;
@@ -47,6 +40,12 @@ export function ChangeReviewPanel({
   onStep: (direction: -1 | 1) => void;
   onRevert: (change: ReviewChange) => void;
   onRevertAll: () => void;
+  onSave: () => void;
+  showMarks: boolean;
+  showAll: boolean;
+  onShowMarksChange: (value: boolean) => void;
+  onShowAllChange: (value: boolean) => void;
+  destinationLabel: string;
 }) {
   const counts = changes.reduce((result, change) => ({ ...result, [change.kind]: result[change.kind] + 1 }), { added: 0, modified: 0, removed: 0 });
 
@@ -58,6 +57,7 @@ export function ChangeReviewPanel({
           <IconButton disabled={changes.length === 0} icon={ChevronUp} label="上一处改动" onClick={() => onStep(-1)} />
           <span>{changes.length > 0 ? `${current + 1}/${changes.length}` : '0/0'}</span>
           <IconButton disabled={changes.length === 0} icon={ChevronDown} label="下一处改动" onClick={() => onStep(1)} />
+          <IconButton active={showAll} disabled={changes.length === 0} icon={ChevronsUpDown} label={showAll ? '收起正文中的全部改动' : '在正文中展开全部改动'} onClick={() => onShowAllChange(!showAll)} />
           <IconButton icon={X} label="关闭改动审阅" onClick={onClose} />
         </div>
       </header>
@@ -71,26 +71,23 @@ export function ChangeReviewPanel({
       {changes.length === 0 ? (
         <div className="change-review-panel__empty"><strong>没有未保存的改动</strong><p>开始编辑后，改动会按位置列在这里。</p></div>
       ) : (
-        <div className="change-review-list">
+        <><p className="change-review-panel__destination">保存后：{destinationLabel}</p><div className="change-review-list">
           {changes.map((change, index) => (
             <div className={`change-review-item ${index === current ? 'change-review-item--active' : ''}`} data-kind={change.kind} key={change.id}>
               <button aria-current={index === current ? 'true' : undefined} className="change-review-item__trigger" onClick={() => onSelect(index)} type="button">
                 <span className="change-review-item__badge">{change.kind === 'added' ? '+' : change.kind === 'removed' ? '-' : '~'}</span>
                 <span><strong>第 {change.newStartLine} 行 · {CHANGE_LABELS[change.kind]}</strong><small>{excerpt(change.after || change.before)}</small></span>
               </button>
-              {index === current ? (
-                <div className="change-review-detail">
-                  {change.before ? <div><span>原来</span><pre><InlineDiff after={change.after} before={change.before} side="before" /></pre></div> : null}
-                  {change.after ? <div><span>现在</span><pre><InlineDiff after={change.after} before={change.before} side="after" /></pre></div> : null}
-                  <Button icon={RotateCcw} onClick={() => onRevert(change)} size="small">撤回这处</Button>
-                </div>
-              ) : null}
+              <button className="change-review-item__undo" onClick={() => onRevert(change)} title="把这一处恢复到上次保存的样子" type="button">撤回</button>
             </div>
           ))}
-        </div>
+        </div></>
       )}
 
-      {changes.length > 0 ? <footer><Button icon={RotateCcw} onClick={onRevertAll} size="small" variant="danger">撤回全部</Button></footer> : null}
+      <footer>
+        <label><input checked={showMarks} onChange={(event) => onShowMarksChange(event.target.checked)} type="checkbox" /><span>正文里显示标记</span></label>
+        {changes.length > 0 ? <><Button icon={RotateCcw} onClick={onRevertAll} size="small" variant="danger">撤回全部</Button><Button icon={Save} onClick={onSave} size="small" variant="primary">保存（接受全部）</Button></> : null}
+      </footer>
     </aside>
   );
 }
