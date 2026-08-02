@@ -150,7 +150,7 @@ export function WorkbenchApp() {
             {!collapsed ? (
               <span>
                 <strong>设置</strong>
-                <small>{storageReady ? '存储已配置' : '存储尚未配置'}</small>
+                <small>{storageReady ? '云端分享已连接' : '本地功能可用'}</small>
               </span>
             ) : null}
           </button>

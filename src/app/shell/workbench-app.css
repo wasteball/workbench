@@ -283,6 +283,11 @@
     padding-inline: 12px;
   }
 
+  .workbench-content {
+    overflow-x: clip;
+    overflow-y: auto;
+  }
+
   .mobile-menu-button {
     display: inline-grid;
   }

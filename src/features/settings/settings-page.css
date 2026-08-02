@@ -74,8 +74,10 @@
 
 .settings-title p,
 .settings-section__label p,
+.storage-reassurance p,
 .storage-form__status p,
 .advanced-settings > p,
+.advanced-settings__fields p,
 .security-notice p,
 .privacy-facts p {
   margin: 0;
@@ -105,8 +107,10 @@
 }
 
 .settings-section__label p,
+.storage-reassurance p,
 .storage-form__status p,
 .advanced-settings > p,
+.advanced-settings__fields p,
 .security-notice p,
 .privacy-facts p {
   font-size: 13px;
@@ -121,6 +125,36 @@
 
 .settings-section__control {
   min-width: 0;
+}
+
+.settings-field {
+  display: grid;
+  min-width: 0;
+  gap: 6px;
+}
+
+.settings-field > span {
+  color: var(--color-ink-secondary);
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.settings-field input,
+.settings-field select,
+.settings-field textarea {
+  width: 100%;
+  min-width: 0;
+  min-height: 40px;
+  border: 1px solid var(--color-border-strong);
+  border-radius: 6px;
+  padding: 8px 11px;
+  background: var(--color-canvas);
+}
+
+.settings-field input:focus,
+.settings-field select:focus,
+.settings-field textarea:focus {
+  border-color: var(--color-primary);
 }
 
 .settings-control-grid {
@@ -251,8 +285,33 @@
   padding: 18px 0;
 }
 
+.storage-reassurance {
+  display: grid;
+  align-items: start;
+  grid-template-columns: 24px minmax(0, 1fr);
+  gap: 10px;
+  border-block: 1px solid var(--color-border);
+  padding: 15px 0;
+  color: var(--color-primary);
+}
+
+.storage-reassurance strong {
+  display: block;
+  margin-bottom: 3px;
+}
+
 .profile-toolbar > .settings-field {
   width: min(420px, 100%);
+}
+
+.storage-empty {
+  display: grid;
+  gap: 3px;
+}
+
+.storage-empty small {
+  color: var(--color-muted);
+  font-size: 12px;
 }
 
 .profile-toolbar__actions,
@@ -302,6 +361,17 @@
 }
 
 .advanced-settings > p {
+  margin-top: 8px;
+}
+
+.advanced-settings__fields {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 18px;
+  margin-top: 18px;
+}
+
+.advanced-settings__fields .header-editor {
   margin-top: 8px;
 }
 
@@ -380,10 +450,13 @@
 @media (max-width: 900px) {
   .settings-page {
     grid-template-columns: 1fr;
+    grid-template-rows: auto minmax(0, 1fr);
+    align-content: start;
   }
 
   .settings-nav {
     display: flex;
+    align-items: center;
     overflow-x: auto;
     border-right: 0;
     border-bottom: 1px solid var(--color-border);
@@ -397,6 +470,7 @@
 
   .settings-nav__item {
     width: auto;
+    min-height: 48px;
     min-width: max-content;
     grid-template-columns: 20px auto;
   }
@@ -410,6 +484,7 @@
   .settings-section,
   .settings-control-grid,
   .storage-fields,
+  .advanced-settings__fields,
   .privacy-facts {
     grid-template-columns: 1fr;
   }

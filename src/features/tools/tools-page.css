@@ -21,23 +21,18 @@
   gap: 6px;
 }
 
-.tool-form label,
-.settings-field {
+.tool-form label {
   display: grid;
   gap: 6px;
 }
 
-.tool-form label > span,
-.settings-field > span {
+.tool-form label > span {
   color: var(--color-ink-secondary);
   font-size: 12px;
   font-weight: 600;
 }
 
-.tool-form input,
-.settings-field input,
-.settings-field select,
-.settings-field textarea {
+.tool-form input {
   width: 100%;
   min-height: 40px;
   border: 1px solid var(--color-border-strong);
@@ -46,10 +41,7 @@
   background: var(--color-canvas);
 }
 
-.tool-form input:focus,
-.settings-field input:focus,
-.settings-field select:focus,
-.settings-field textarea:focus {
+.tool-form input:focus {
   border-color: var(--color-primary);
 }
 

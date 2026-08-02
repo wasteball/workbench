@@ -352,7 +352,7 @@ export function FilesPage({ route, navigate }: PageProps) {
           <div className="document-share-panel__heading"><div><p className="page-kicker">在线分享</p><h2>{pendingShare.title}</h2><p>将当前内容生成一个新文件后上传，不会创建在线编辑页。</p></div><IconButton icon={X} label="关闭分享" onClick={() => setPendingShare(null)} /></div>
           <div className="document-share-options">
             <div><span>分享格式</span><div className="segmented-control"><button aria-pressed={shareFormat === 'html'} onClick={() => setShareFormat('html')} type="button">HTML</button><button aria-pressed={shareFormat === 'docx'} onClick={() => setShareFormat('docx')} type="button">Word</button><button aria-pressed={shareFormat === 'markdown'} onClick={() => setShareFormat('markdown')} type="button">Markdown</button></div></div>
-            {activeProfile?.provider === 'aliyun-oss' ? <div><span>访问方式</span><div className="segmented-control"><button aria-pressed={shareAccess === 'private'} onClick={() => setShareAccess('private')} type="button">私有限时链接</button><button aria-pressed={shareAccess === 'public'} onClick={() => setShareAccess('public')} type="button">公开链接</button></div></div> : <div><span>访问方式</span><p>访问权限由上传网关决定。</p></div>}
+            {activeProfile?.provider === 'aliyun-oss' ? <div><span>访问方式</span><div className="segmented-control"><button aria-pressed={shareAccess === 'private'} onClick={() => setShareAccess('private')} type="button">私有限时链接</button><button aria-pressed={shareAccess === 'public'} onClick={() => setShareAccess('public')} type="button">公开链接</button></div></div> : <div><span>访问方式</span><p>访问范围由当前存储服务决定。</p></div>}
           </div>
           {!storageReady ? <div className="inline-warning"><span>在线分享需要先连接存储。</span><Button icon={Settings2} onClick={() => navigate('settings', new URLSearchParams({ section: 'storage' }))} size="small">连接存储</Button></div> : null}
           {shareMessage ? <p className="share-message" role="status">{shareMessage}</p> : null}
@@ -396,7 +396,7 @@ export function FilesPage({ route, navigate }: PageProps) {
             {filteredHistory.map((record) => (
               <div className="share-record" key={record.id}>
                 <span className="share-record__icon"><Link2 aria-hidden="true" size={17} /></span>
-                <span className="share-record__main"><strong>{record.displayName}</strong><small>{record.category} · {formatBytes(record.size)} · {record.storageProvider === 'gateway' ? '上传网关' : '阿里云 OSS'}</small></span>
+                <span className="share-record__main"><strong>{record.displayName}</strong><small>{record.category} · {formatBytes(record.size)} · {record.storageProvider === 'gateway' ? '单位存储' : '阿里云存储'}</small></span>
                 <StatusPill tone={record.access === 'public' ? 'success' : record.access === 'signed' ? 'primary' : 'warning'}>{accessLabel(record)}</StatusPill>
                 <time>{formatDate(record.createdAt)}</time>
                 <div className="share-record__actions"><IconButton icon={Clipboard} label="复制分享信息" onClick={() => void copyRecord(record)} /><IconButton icon={ExternalLink} label="打开链接" onClick={() => void browser.tabs.create({ url: record.url })} /><IconButton icon={Download} label="下载文件" onClick={() => void browser.downloads.download({ url: record.url, filename: record.displayName })} /><IconButton icon={Trash2} label="只删除本地记录" onClick={() => void removeHistory(record)} /></div>

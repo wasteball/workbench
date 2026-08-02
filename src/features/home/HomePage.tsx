@@ -40,7 +40,7 @@ export function HomePage({ navigate }: PageProps) {
         <div>
           <p className="page-kicker">Workbench</p>
           <h1>今天要处理什么？</h1>
-          <p>打开文档、继续草稿，或把文件安全地分享出去。</p>
+          <p>打开文档、继续草稿，或在需要时把文件分享出去。</p>
         </div>
         <Button icon={FilePlus2} onClick={() => void createDocument()} variant="primary">
           新建文档
@@ -54,7 +54,7 @@ export function HomePage({ navigate }: PageProps) {
           type="button"
         >
           <span className="quick-action__icon"><FolderOpen aria-hidden="true" size={23} /></span>
-          <span><strong>打开 Markdown</strong><small>从电脑选择文件或文件夹</small></span>
+          <span><strong>打开文档</strong><small>支持 Markdown 文件或文件夹</small></span>
           <ArrowRight aria-hidden="true" size={18} />
         </button>
         <button
@@ -63,12 +63,12 @@ export function HomePage({ navigate }: PageProps) {
           type="button"
         >
           <span className="quick-action__icon"><UploadCloud aria-hidden="true" size={23} /></span>
-          <span><strong>上传文件</strong><small>需要先连接自己的存储</small></span>
+          <span><strong>上传并分享</strong><small>可选，首次使用时再连接存储</small></span>
           <ArrowRight aria-hidden="true" size={18} />
         </button>
         <button className="quick-action" onClick={() => navigate('settings')} type="button">
           <span className="quick-action__icon"><Settings2 aria-hidden="true" size={23} /></span>
-          <span><strong>整理工作台</strong><small>调整菜单、外观与存储</small></span>
+          <span><strong>整理工作台</strong><small>调整菜单、外观和更多功能</small></span>
           <ArrowRight aria-hidden="true" size={18} />
         </button>
       </section>

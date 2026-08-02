@@ -63,7 +63,7 @@ const SETTINGS_SECTIONS: Array<{
 }> = [
   { id: 'general', name: '常规与外观', description: '主题与默认格式', icon: Palette },
   { id: 'menu', name: '菜单与工具', description: '顺序、显示与快捷入口', icon: ListTree },
-  { id: 'storage', name: '存储连接', description: '上传网关与阿里云 OSS', icon: HardDrive },
+  { id: 'storage', name: '云端分享', description: '可选，不影响本地使用', icon: HardDrive },
   { id: 'privacy', name: '权限与隐私', description: '导入、导出与本地数据', icon: ShieldCheck },
 ];
 
@@ -75,7 +75,7 @@ function createGatewayProfile(index: number): StorageProfile {
   return {
     id: nanoid(),
     provider: 'gateway',
-    name: index > 1 ? `上传网关 ${index}` : '上传网关',
+    name: index > 1 ? `单位提供的连接 ${index}` : '单位提供的连接',
     apiUrl: '',
     bucket: '',
     userCode: '',
@@ -89,7 +89,7 @@ function createAliyunProfile(index: number): StorageProfile {
   return {
     id: nanoid(),
     provider: 'aliyun-oss',
-    name: index > 1 ? `阿里云 OSS ${index}` : '阿里云 OSS',
+    name: index > 1 ? `我的阿里云存储 ${index}` : '我的阿里云存储',
     credentialMode: 'access-key',
     region: '',
     endpoint: '',
@@ -140,7 +140,7 @@ function SortableMenuRow({
       <span className="sortable-menu-row__icon">{item.icon}</span>
       <span className="sortable-menu-row__copy"><strong>{item.name}</strong><small>{item.description}</small></span>
       <label className="compact-check"><input checked={visible} onChange={(event) => onVisibleChange(event.target.checked)} type="checkbox" /><span>显示</span></label>
-      <label className="compact-check" title={pinningDisabled ? `Popup 最多固定 ${MAX_POPUP_CAPABILITIES} 项` : undefined}><input checked={pinned} disabled={!visible || pinningDisabled} onChange={(event) => onPinnedChange(event.target.checked)} type="checkbox" /><span>Popup</span></label>
+      <label className="compact-check" title={pinningDisabled ? `浏览器快捷菜单最多显示 ${MAX_POPUP_CAPABILITIES} 项` : undefined}><input checked={pinned} disabled={!visible || pinningDisabled} onChange={(event) => onPinnedChange(event.target.checked)} type="checkbox" /><span>快捷</span></label>
     </div>
   );
 }
@@ -188,7 +188,7 @@ export function SettingsPage({ route, navigate }: PageProps) {
     ?? settings.storageProfiles[0];
 
   useEffect(() => {
-    if (activeProfile) setProfileDraft(structuredClone(activeProfile));
+    setProfileDraft(activeProfile ? structuredClone(activeProfile) : null);
   }, [activeProfile]);
 
   const menuItems = useMemo<MenuSettingsItem[]>(() => {
@@ -250,7 +250,7 @@ export function SettingsPage({ route, navigate }: PageProps) {
         const url = new URL(profileDraft.apiUrl);
         if (!['http:', 'https:'].includes(url.protocol)) throw new Error();
       } catch {
-        setStorageMessage('API 地址必须是有效的 http 或 https 地址。');
+        setStorageMessage('请填写有效的上传地址。');
         return;
       }
     }
@@ -286,9 +286,8 @@ export function SettingsPage({ route, navigate }: PageProps) {
     if (!profileDraft || !window.confirm(`删除“${profileDraft.name}”？已保存的凭据也会一并移除。`)) return;
     storageService.forget(profileDraft.id);
     const remaining = settings.storageProfiles.filter((profile) => profile.id !== profileDraft.id);
-    const nextProfiles = remaining.length > 0 ? remaining : [createGatewayProfile(1)];
-    await update({ storageProfiles: nextProfiles, activeStorageProfileId: nextProfiles[0]?.id ?? null });
-    setProfileDraft(nextProfiles[0] ?? null);
+    await update({ storageProfiles: remaining, activeStorageProfileId: remaining[0]?.id ?? null });
+    setProfileDraft(remaining[0] ?? null);
     setStorageMessage('连接已删除。');
   };
 
@@ -332,7 +331,7 @@ export function SettingsPage({ route, navigate }: PageProps) {
       <div className="settings-content">
         {section === 'general' ? (
           <>
-            <header className="settings-title"><h2>常规与外观</h2><p>这些偏好会同时用于 Popup 和完整工作台。</p></header>
+            <header className="settings-title"><h2>常规与外观</h2><p>这些偏好会同时用于浏览器快捷菜单和完整工作台。</p></header>
             <section className="settings-section">
               <div className="settings-section__label"><h3>主题</h3><p>可以固定亮色、暗色，或跟随系统。</p></div>
               <div className="settings-section__control">
@@ -364,7 +363,7 @@ export function SettingsPage({ route, navigate }: PageProps) {
           <>
             <header className="settings-title"><h2>菜单与工具</h2><p>拖动调整顺序；设置入口始终固定在菜单底部。</p></header>
             <section className="settings-section settings-section--stacked">
-              <div className="settings-section__label settings-section__label--row"><div><h3>工作台菜单</h3><p>“Popup”表示是否出现在浏览器按钮的快捷区，最多固定 {MAX_POPUP_CAPABILITIES} 项。</p></div><Button icon={RotateCcw} onClick={() => void update({ menuOrder: DEFAULT_SETTINGS.menuOrder, hiddenCapabilities: [], pinnedCapabilities: DEFAULT_SETTINGS.pinnedCapabilities })} size="small" variant="quiet">恢复默认</Button></div>
+              <div className="settings-section__label settings-section__label--row"><div><h3>工作台菜单</h3><p>“快捷”表示是否显示在浏览器工具栏按钮中，最多选择 {MAX_POPUP_CAPABILITIES} 项。</p></div><Button icon={RotateCcw} onClick={() => void update({ menuOrder: DEFAULT_SETTINGS.menuOrder, hiddenCapabilities: [], pinnedCapabilities: DEFAULT_SETTINGS.pinnedCapabilities })} size="small" variant="quiet">恢复默认</Button></div>
               <div className="sortable-menu-list">
                 <DndContext collisionDetection={closestCenter} onDragEnd={(event) => void handleDragEnd(event)} sensors={sensors}>
                   <SortableContext items={menuItems.map((item) => item.id)} strategy={verticalListSortingStrategy}>
@@ -388,51 +387,59 @@ export function SettingsPage({ route, navigate }: PageProps) {
 
         {section === 'storage' ? (
           <>
-            <header className="settings-title"><h2>存储连接</h2><p>未配置时只关闭上传和在线分享，本地编辑与导出始终可用。</p></header>
+            <header className="settings-title"><h2>云端分享</h2><p>只有上传文件或生成在线链接时才需要设置。</p></header>
+            <div className="storage-reassurance"><ShieldCheck aria-hidden="true" size={20} /><div><strong>本地使用无需设置</strong><p>新建、打开、编辑、阅读和导出文档始终可用。没有存储连接时，只会关闭上传和在线分享。</p></div></div>
             <div className="profile-toolbar">
-              <label className="settings-field"><span>当前连接</span><select onChange={(event) => void update({ activeStorageProfileId: event.target.value })} value={activeProfile?.id ?? ''}>{settings.storageProfiles.map((profile) => <option key={profile.id} value={profile.id}>{profile.name} · {profile.provider === 'gateway' ? '上传网关' : '阿里云 OSS'}</option>)}</select></label>
-              <div className="profile-toolbar__actions"><Button icon={Plus} onClick={() => void addProfile('gateway')} size="small">上传网关</Button><Button icon={Plus} onClick={() => void addProfile('aliyun-oss')} size="small">阿里云 OSS</Button></div>
+              {settings.storageProfiles.length > 0 ? <label className="settings-field"><span>已保存的连接</span><select onChange={(event) => void update({ activeStorageProfileId: event.target.value })} value={activeProfile?.id ?? ''}>{settings.storageProfiles.map((profile) => <option key={profile.id} value={profile.id}>{profile.name} · {profile.provider === 'gateway' ? '单位提供' : '阿里云'}</option>)}</select></label> : <div className="storage-empty"><strong>尚未连接云端存储</strong><small>可以继续只在本地使用，或按需选择一种连接方式。</small></div>}
+              <div className="profile-toolbar__actions"><Button icon={Plus} onClick={() => void addProfile('aliyun-oss')} size="small" variant="primary">我的阿里云存储</Button><Button icon={Plus} onClick={() => void addProfile('gateway')} size="small">单位提供的连接</Button></div>
             </div>
 
             {profileDraft ? (
               <section className="storage-form">
-                <div className="storage-form__status"><div><strong>{profileDraft.provider === 'gateway' ? '现有上传网关' : '阿里云 OSS'}</strong><p>{profileDraft.provider === 'gateway' ? '使用管理员提供的上传接口；代码中不带任何默认地址。' : '直接连接你自己的 Bucket，支持长期 AccessKey 或 STS。'}</p></div><StatusPill tone={isStorageProfileConfigured(profileDraft) ? 'success' : 'warning'}>{isStorageProfileConfigured(profileDraft) ? '必填项完整' : '尚未配置'}</StatusPill></div>
+                <div className="storage-form__status"><div><strong>{profileDraft.provider === 'gateway' ? '单位或服务提供的连接' : '我的阿里云存储'}</strong><p>{profileDraft.provider === 'gateway' ? '只有管理员或服务提供者给过你连接信息时才需要填写。' : '按照阿里云存储页面中的信息填写，用于上传和生成分享链接。'}</p></div><StatusPill tone={isStorageProfileConfigured(profileDraft) ? 'success' : 'warning'}>{isStorageProfileConfigured(profileDraft) ? '可以使用' : '尚未配置'}</StatusPill></div>
                 <div className="storage-fields">
-                  <label className="settings-field"><span>连接名称</span><input onChange={(event) => setDraft({ name: event.target.value })} value={profileDraft.name} /></label>
+                  <label className="settings-field settings-field--wide"><span>连接名称</span><input onChange={(event) => setDraft({ name: event.target.value })} value={profileDraft.name} /></label>
 
                   {profileDraft.provider === 'gateway' ? (
                     <>
-                      <label className="settings-field settings-field--wide"><span>API 地址</span><input inputMode="url" onChange={(event) => setDraft({ apiUrl: event.target.value })} placeholder="https://your-service.example/upload" value={profileDraft.apiUrl} /></label>
-                      <label className="settings-field"><span>Bucket</span><input onChange={(event) => setDraft({ bucket: event.target.value })} placeholder="管理员提供" value={profileDraft.bucket} /></label>
-                      <label className="settings-field"><span>用户标识</span><input onChange={(event) => setDraft({ userCode: event.target.value })} placeholder="管理员提供" value={profileDraft.userCode} /></label>
-                      <label className="setting-toggle"><input checked={profileDraft.cdn} onChange={(event) => setDraft({ cdn: event.target.checked })} type="checkbox" /><span><strong>使用 CDN</strong><small>仅在网关支持时开启</small></span></label>
-                      <label className="setting-toggle"><input checked={profileDraft.publicRead} onChange={(event) => setDraft({ publicRead: event.target.checked })} type="checkbox" /><span><strong>请求公开读取</strong><small>最终访问权限由网关决定</small></span></label>
-                      <details className="advanced-settings settings-field--wide"><summary>高级连接参数</summary><p>请求头内容可能包含凭据，只会保存在当前浏览器中，导出配置时会移除。</p><HeaderEditor onChange={(headers) => setDraft({ headers } as Partial<StorageProfile>)} value={profileDraft.headers} /></details>
+                      <label className="settings-field settings-field--wide"><span>上传地址</span><input inputMode="url" onChange={(event) => setDraft({ apiUrl: event.target.value })} placeholder="由管理员或服务提供者提供" value={profileDraft.apiUrl} /></label>
+                      <label className="settings-field"><span>存储空间名称</span><input onChange={(event) => setDraft({ bucket: event.target.value })} placeholder="由管理员提供" value={profileDraft.bucket} /></label>
+                      <label className="settings-field"><span>用户标识</span><input onChange={(event) => setDraft({ userCode: event.target.value })} placeholder="由管理员提供" value={profileDraft.userCode} /></label>
+                      <label className="setting-toggle"><input checked={profileDraft.cdn} onChange={(event) => setDraft({ cdn: event.target.checked })} type="checkbox" /><span><strong>使用加速地址</strong><small>仅在服务提供者要求时开启</small></span></label>
+                      <label className="setting-toggle"><input checked={profileDraft.publicRead} onChange={(event) => setDraft({ publicRead: event.target.checked })} type="checkbox" /><span><strong>生成公开链接</strong><small>最终访问范围由存储服务决定</small></span></label>
+                      <details className="advanced-settings settings-field--wide"><summary>高级参数（通常不用修改）</summary><p>只有管理员提供了额外参数时才填写。导出配置时会自动移除其中的身份信息。</p><HeaderEditor onChange={(headers) => setDraft({ headers } as Partial<StorageProfile>)} value={profileDraft.headers} /></details>
                     </>
                   ) : (
                     <>
-                      <div className="settings-field settings-field--wide"><span>凭证方式</span><div className="segmented-control"><button aria-pressed={profileDraft.credentialMode === 'access-key'} onClick={() => setDraft({ credentialMode: 'access-key' })} type="button">长期 AccessKey</button><button aria-pressed={profileDraft.credentialMode === 'sts'} onClick={() => setDraft({ credentialMode: 'sts' })} type="button">STS 临时凭证</button></div></div>
-                      <label className="settings-field"><span>地域 Region</span><input onChange={(event) => setDraft({ region: event.target.value })} placeholder="oss-cn-hangzhou" value={profileDraft.region} /></label>
-                      <label className="settings-field"><span>Bucket</span><input onChange={(event) => setDraft({ bucket: event.target.value })} value={profileDraft.bucket} /></label>
-                      <label className="settings-field settings-field--wide"><span>自定义 Endpoint（可选）</span><input onChange={(event) => setDraft({ endpoint: event.target.value })} placeholder="https://oss-cn-hangzhou.aliyuncs.com" value={profileDraft.endpoint} /></label>
-                      <label className="settings-field settings-field--wide"><span>对象前缀（可选）</span><input onChange={(event) => setDraft({ prefix: event.target.value })} placeholder="workbench/" value={profileDraft.prefix} /></label>
+                      <label className="settings-field"><span>所在地域代码</span><input onChange={(event) => setDraft({ region: event.target.value })} placeholder="例如 oss-cn-hangzhou" value={profileDraft.region} /></label>
+                      <label className="settings-field"><span>存储空间名称</span><input onChange={(event) => setDraft({ bucket: event.target.value })} placeholder="从阿里云存储页面复制" value={profileDraft.bucket} /></label>
 
                       {profileDraft.credentialMode === 'access-key' ? (
                         <>
-                          <div className="security-notice settings-field--wide"><ShieldCheck aria-hidden="true" size={19} /><p><strong>请使用权限受限的独立 RAM 用户。</strong>浏览器扩展存储不是系统钥匙串；不要填写阿里云主账号 AccessKey。</p></div>
-                          <label className="settings-field"><span>AccessKey ID</span><input autoComplete="off" onChange={(event) => setDraft({ accessKeyId: event.target.value })} value={profileDraft.accessKeyId} /></label>
-                          <label className="settings-field secret-field"><span>AccessKey Secret</span><span className="secret-input"><input autoComplete="new-password" onChange={(event) => setDraft({ accessKeySecret: event.target.value })} type={showSecret ? 'text' : 'password'} value={profileDraft.accessKeySecret} /><IconButton icon={showSecret ? EyeOff : Eye} label={showSecret ? '隐藏 Secret' : '显示 Secret'} onClick={() => setShowSecret((value) => !value)} /></span></label>
-                          <label className="setting-toggle settings-field--wide"><input checked={profileDraft.rememberAccessKey} onChange={(event) => setDraft({ rememberAccessKey: event.target.checked })} type="checkbox" /><span><strong>在此浏览器记住 Secret</strong><small>关闭时仅保留到本次浏览器会话结束</small></span></label>
+                          <div className="security-notice settings-field--wide"><ShieldCheck aria-hidden="true" size={19} /><p><strong>请为 Workbench 单独创建权限受限的访问密钥。</strong>不要填写阿里云主账号的密钥；不确定时先不要开启云端分享。</p></div>
+                          <label className="settings-field"><span>访问身份（AccessKey ID）</span><input autoComplete="off" onChange={(event) => setDraft({ accessKeyId: event.target.value })} value={profileDraft.accessKeyId} /></label>
+                          <label className="settings-field secret-field"><span>访问密钥（AccessKey Secret）</span><span className="secret-input"><input autoComplete="new-password" onChange={(event) => setDraft({ accessKeySecret: event.target.value })} type={showSecret ? 'text' : 'password'} value={profileDraft.accessKeySecret} /><IconButton icon={showSecret ? EyeOff : Eye} label={showSecret ? '隐藏访问密钥' : '显示访问密钥'} onClick={() => setShowSecret((value) => !value)} /></span></label>
+                          <label className="setting-toggle settings-field--wide"><input checked={profileDraft.rememberAccessKey} onChange={(event) => setDraft({ rememberAccessKey: event.target.checked })} type="checkbox" /><span><strong>在此浏览器记住访问密钥</strong><small>关闭时，浏览器完全退出后需要重新填写</small></span></label>
                         </>
                       ) : (
                         <>
-                          <label className="settings-field settings-field--wide"><span>STS 服务地址</span><input inputMode="url" onChange={(event) => setDraft({ stsUrl: event.target.value })} placeholder="https://your-service.example/sts" value={profileDraft.stsUrl} /></label>
-                          <details className="advanced-settings settings-field--wide"><summary>STS 请求头</summary><p>用于向你自己的 STS 服务证明身份；导出配置时会移除内容。</p><HeaderEditor onChange={(stsHeaders) => setDraft({ stsHeaders } as Partial<StorageProfile>)} value={profileDraft.stsHeaders} /></details>
+                          <div className="security-notice settings-field--wide"><ShieldCheck aria-hidden="true" size={19} /><p><strong>当前使用高级临时授权方式。</strong>服务地址和身份参数应由服务提供者给出。</p></div>
+                          <label className="settings-field settings-field--wide"><span>临时授权服务地址</span><input inputMode="url" onChange={(event) => setDraft({ stsUrl: event.target.value })} placeholder="由服务提供者提供" value={profileDraft.stsUrl} /></label>
                         </>
                       )}
 
-                      <div className="settings-field"><span>默认访问方式</span><div className="segmented-control"><button aria-pressed={profileDraft.defaultAccess === 'private'} onClick={() => setDraft({ defaultAccess: 'private' })} type="button">私有</button><button aria-pressed={profileDraft.defaultAccess === 'public'} onClick={() => setDraft({ defaultAccess: 'public' })} type="button">公开</button></div></div>
-                      <label className="settings-field"><span>私有链接有效期（秒）</span><input max={86400} min={60} onChange={(event) => setDraft({ signedUrlExpiresInSeconds: Number(event.target.value) || 3600 })} type="number" value={profileDraft.signedUrlExpiresInSeconds} /></label>
+                      <div className="settings-field"><span>分享链接默认范围</span><div className="segmented-control"><button aria-pressed={profileDraft.defaultAccess === 'private'} onClick={() => setDraft({ defaultAccess: 'private' })} type="button">私密</button><button aria-pressed={profileDraft.defaultAccess === 'public'} onClick={() => setDraft({ defaultAccess: 'public' })} type="button">公开</button></div></div>
+                      <label className="settings-field"><span>私密链接多久后失效</span><select onChange={(event) => setDraft({ signedUrlExpiresInSeconds: Number(event.target.value) })} value={profileDraft.signedUrlExpiresInSeconds}><option value={600}>10 分钟</option><option value={3600}>1 小时</option><option value={21600}>6 小时</option><option value={86400}>1 天</option></select></label>
+                      <details className="advanced-settings settings-field--wide">
+                        <summary>高级连接方式与参数</summary>
+                        <p>只有服务提供者明确要求时才修改这里。</p>
+                        <div className="advanced-settings__fields">
+                          <div className="settings-field settings-field--wide"><span>连接方式</span><div className="segmented-control"><button aria-pressed={profileDraft.credentialMode === 'access-key'} onClick={() => setDraft({ credentialMode: 'access-key' })} type="button">访问密钥（常用）</button><button aria-pressed={profileDraft.credentialMode === 'sts'} onClick={() => setDraft({ credentialMode: 'sts' })} type="button">临时授权服务</button></div></div>
+                          <label className="settings-field settings-field--wide"><span>自定义服务地址</span><input onChange={(event) => setDraft({ endpoint: event.target.value })} placeholder="不填写时使用阿里云默认地址" value={profileDraft.endpoint} /></label>
+                          <label className="settings-field settings-field--wide"><span>文件保存目录</span><input onChange={(event) => setDraft({ prefix: event.target.value })} placeholder="例如 workbench/" value={profileDraft.prefix} /></label>
+                          {profileDraft.credentialMode === 'sts' ? <div className="settings-field settings-field--wide"><span>临时授权身份参数</span><p>仅填写服务提供者给出的内容；导出配置时会自动移除。</p><HeaderEditor onChange={(stsHeaders) => setDraft({ stsHeaders } as Partial<StorageProfile>)} value={profileDraft.stsHeaders} /></div> : null}
+                        </div>
+                      </details>
                     </>
                   )}
                 </div>
@@ -447,14 +454,14 @@ export function SettingsPage({ route, navigate }: PageProps) {
           <>
             <header className="settings-title"><h2>权限与隐私</h2><p>Workbench 默认在本机处理文档，只有你主动上传时才连接配置的存储。</p></header>
             <section className="settings-section">
-              <div className="settings-section__label"><h3>配置备份</h3><p>导出文件不包含 AccessKey、用户标识或请求头内容。</p></div>
+              <div className="settings-section__label"><h3>配置备份</h3><p>导出的配置不会包含密码、密钥或身份信息。</p></div>
               <div className="settings-section__control action-row"><Button icon={Download} onClick={exportSettings}>导出配置</Button><Button icon={Upload} onClick={() => importInput.current?.click()}>导入配置</Button><input accept="application/json,.json" className="sr-only" onChange={(event) => { const file = event.target.files?.[0]; if (file) void importSettings(file); event.target.value = ''; }} ref={importInput} type="file" /></div>
             </section>
             <section className="settings-section">
-              <div className="settings-section__label"><h3>本地数据</h3><p>草稿和分享记录保存在扩展的 IndexedDB 中；清除浏览器扩展数据或卸载扩展也会删除它们。</p></div>
+              <div className="settings-section__label"><h3>本地数据</h3><p>草稿和分享记录只保存在当前浏览器中；清除扩展数据或卸载扩展也会删除它们。</p></div>
               <div className="settings-section__control"><Button icon={Trash2} onClick={() => void clearLocalData()} variant="danger">清除本地数据</Button></div>
             </section>
-            <section className="privacy-facts" aria-label="数据使用说明"><div><strong>文档内容</strong><p>只在你主动分享或上传时发送到当前连接器。</p></div><div><strong>配置同步</strong><p>所有设置均使用本地存储，不写入浏览器同步空间。</p></div><div><strong>网页权限</strong><p>读取网址时按站点单独申请，不在安装时请求访问全部网站。</p></div></section>
+            <section className="privacy-facts" aria-label="数据使用说明"><div><strong>文档内容</strong><p>只在你主动分享或上传时发送到当前选择的存储服务。</p></div><div><strong>配置同步</strong><p>所有设置均使用本地存储，不写入浏览器同步空间。</p></div><div><strong>网页权限</strong><p>读取网址时按站点单独申请，不在安装时请求访问全部网站。</p></div></section>
             {importMessage ? <p className="settings-message" role="status">{importMessage}</p> : null}
           </>
         ) : null}

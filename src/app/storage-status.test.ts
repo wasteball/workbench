@@ -1,8 +1,14 @@
 import { describe, expect, it } from 'vitest';
 
 import { isStorageProfileConfigured } from '@/app/storage-status';
+import { DEFAULT_SETTINGS } from '@/shared/settings/defaults';
 
 describe('storage profile readiness', () => {
+  it('starts with cloud sharing disabled and no setup required', () => {
+    expect(DEFAULT_SETTINGS.storageProfiles).toEqual([]);
+    expect(DEFAULT_SETTINGS.activeStorageProfileId).toBeNull();
+  });
+
   it('requires all gateway fields', () => {
     expect(isStorageProfileConfigured({ id: 'g', provider: 'gateway', name: 'Gateway', apiUrl: 'https://example.com', bucket: '', userCode: 'u', cdn: false, publicRead: false, headers: [] })).toBe(false);
     expect(isStorageProfileConfigured({ id: 'g', provider: 'gateway', name: 'Gateway', apiUrl: 'https://example.com', bucket: 'b', userCode: 'u', cdn: false, publicRead: false, headers: [] })).toBe(true);

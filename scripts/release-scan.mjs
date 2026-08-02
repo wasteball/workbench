@@ -70,9 +70,16 @@ for (const absolutePath of collectFiles(projectRoot)) {
 
 const defaultsPath = resolve(projectRoot, 'src/shared/settings/defaults.ts');
 const defaults = readFileSync(defaultsPath, 'utf8');
-for (const field of ['apiUrl', 'bucket', 'userCode']) {
-  if (!new RegExp(`${field}:\\s*''`).test(defaults)) {
-    findings.push(`src/shared/settings/defaults.ts: ${field} must default to an empty string`);
+const defaultsToNoStorage = /storageProfiles:\s*\[\s*\]/s.test(defaults);
+if (defaultsToNoStorage) {
+  if (!/activeStorageProfileId:\s*null/.test(defaults)) {
+    findings.push('src/shared/settings/defaults.ts: active storage must be null when no storage is configured');
+  }
+} else {
+  for (const field of ['apiUrl', 'bucket', 'userCode']) {
+    if (!new RegExp(`${field}:\\s*''`).test(defaults)) {
+      findings.push(`src/shared/settings/defaults.ts: ${field} must default to an empty string`);
+    }
   }
 }
 for (const field of ['accessKeyId', 'accessKeySecret']) {
