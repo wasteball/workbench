@@ -132,6 +132,7 @@ export function MarkdownWorkspace({ route, navigate }: PageProps) {
   const [railOpen, setRailOpen] = useState(() => !isNarrowViewport() && settings.markdownRailOpen);
   const [reviewOpen, setReviewOpen] = useState(false);
   const [reviewIndex, setReviewIndex] = useState(0);
+  const [reviewFocusVersion, setReviewFocusVersion] = useState(0);
   const [reviewShowMarks, setReviewShowMarks] = useState(settings.reviewShowMarks);
   const [reviewShowAll, setReviewShowAll] = useState(false);
   const [reviewInlineOpen, setReviewInlineOpen] = useState(false);
@@ -833,6 +834,7 @@ export function MarkdownWorkspace({ route, navigate }: PageProps) {
     if (!change) return;
     setReviewIndex(index);
     setReviewInlineOpen(true);
+    setReviewFocusVersion((current) => current + 1);
     if (mode === 'source') setMode('read');
   }, [mode, reviewChanges]);
 
@@ -943,6 +945,7 @@ export function MarkdownWorkspace({ route, navigate }: PageProps) {
   const previewReview = useMemo(() => active && !active.needsSource && reviewChanges.length > 0 ? {
     changes: reviewChanges,
     current: reviewIndex,
+    focusVersion: reviewFocusVersion,
     showMarks: reviewShowMarks,
     showAll: reviewShowAll,
     showCurrent: reviewInlineOpen,
@@ -956,6 +959,7 @@ export function MarkdownWorkspace({ route, navigate }: PageProps) {
   } : undefined, [
     active,
     reviewChanges,
+    reviewFocusVersion,
     reviewIndex,
     reviewInlineOpen,
     reviewShowAll,
@@ -1066,6 +1070,7 @@ export function MarkdownWorkspace({ route, navigate }: PageProps) {
                 if (!value && reviewChanges.length > 0) {
                   setReviewShowAll(false);
                   setReviewInlineOpen(true);
+                  setReviewFocusVersion((current) => current + 1);
                 }
                 return !value;
               });
@@ -1082,8 +1087,8 @@ export function MarkdownWorkspace({ route, navigate }: PageProps) {
                 onSelect={selectReviewChange}
                 onShowMarksChange={rememberReviewShowMarks}
                 onStep={stepReview}
-                onViewAll={() => { setReviewShowAll(true); setReviewInlineOpen(true); }}
-                onViewCurrent={() => { setReviewShowAll(false); setReviewInlineOpen(true); }}
+                onViewAll={() => { setReviewShowAll(true); setReviewInlineOpen(true); setReviewFocusVersion((current) => current + 1); }}
+                onViewCurrent={() => { setReviewShowAll(false); setReviewInlineOpen(true); setReviewFocusVersion((current) => current + 1); }}
                 showAll={reviewShowAll}
                 showCurrent={reviewInlineOpen}
                 showMarks={reviewShowMarks}

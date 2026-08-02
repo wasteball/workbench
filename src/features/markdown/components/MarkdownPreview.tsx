@@ -87,6 +87,8 @@ interface MarkdownPreviewProps {
   review?: {
     changes: ReviewChange[];
     current: number;
+    // Re-run positioning even when the user selects the already-current change.
+    focusVersion: number;
     showMarks: boolean;
     showAll: boolean;
     showCurrent: boolean;
@@ -192,6 +194,11 @@ function findReviewTarget(body: HTMLElement, change: ReviewChange): HTMLElement 
   });
   if (direct) return direct;
   return blocks.find((block) => Number(block.dataset.sourceFrom) >= change.currentFrom) ?? blocks.at(-1) ?? null;
+}
+
+export function findReviewNavigationTarget(body: HTMLElement, change: ReviewChange, index: number): HTMLElement | null {
+  return body.querySelector<HTMLElement>(`.inline-review-card[data-review-index="${index}"]`)
+    ?? findReviewTarget(body, change);
 }
 
 function preciseReviewDiff(change: ReviewChange): HTMLElement | null {
@@ -638,6 +645,7 @@ export const MarkdownPreview = memo(forwardRef<MarkdownPreviewHandle, MarkdownPr
     const body = bodyRef.current;
     if (!body || !review) return;
     let active = true;
+    let scrollFrame: number | null = null;
     const inserted: HTMLElement[] = [];
     const suppressed: HTMLElement[] = [];
     body.querySelectorAll<HTMLElement>('.markdown-block').forEach((block) => block.removeAttribute('data-review-kind'));
@@ -707,15 +715,19 @@ export const MarkdownPreview = memo(forwardRef<MarkdownPreviewHandle, MarkdownPr
         suppressed.push(target);
       }
       inserted.push(card);
-    }));
-
-    const selected = review.showAll || review.showCurrent ? review.changes[review.current] : undefined;
-    if (selected) {
-      window.requestAnimationFrame(() => findReviewTarget(body, selected)?.scrollIntoView({ behavior: 'smooth', block: 'center' }));
-    }
+    })).then(() => {
+      if (!active) return;
+      const selected = review.showAll || review.showCurrent ? review.changes[review.current] : undefined;
+      if (!selected) return;
+      scrollFrame = window.requestAnimationFrame(() => {
+        if (!active) return;
+        findReviewNavigationTarget(body, selected, review.current)?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      });
+    });
 
     return () => {
       active = false;
+      if (scrollFrame !== null) window.cancelAnimationFrame(scrollFrame);
       inserted.forEach((element) => element.remove());
       suppressed.forEach((element) => element.classList.remove('markdown-block--review-suppressed'));
       body.querySelectorAll<HTMLElement>('.markdown-block').forEach((block) => block.removeAttribute('data-review-kind'));
