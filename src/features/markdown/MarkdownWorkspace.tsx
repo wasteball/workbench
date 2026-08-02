@@ -47,6 +47,7 @@ import {
 } from '@/features/markdown/engine/review-changes';
 import { getExporter } from '@/features/markdown/exporters/registry';
 import type { ExportFormat } from '@/features/markdown/exporters/contract';
+import { exportAppearanceFromSettings } from '@/features/markdown/exporters/export-appearance';
 import { safeFileName } from '@/features/markdown/exporters/file-name';
 import { MarkdownPreview, type MarkdownPreviewHandle } from '@/features/markdown/components/MarkdownPreview';
 import { toggleTask } from '@/features/markdown/engine/toggle-task';
@@ -119,7 +120,7 @@ function destinationCopy(record: DocumentRecord, hasUnsavedChanges: boolean) {
 
 export function MarkdownWorkspace({ route, navigate }: PageProps) {
   const { setDestination } = useDestination();
-  const { settings, update: updateSettings } = useSettings();
+  const { settings, loading: settingsLoading, update: updateSettings } = useSettings();
   const [documents, setDocuments] = useState<DocumentRecord[]>([]);
   const [active, setActive] = useState<LoadedDocument | null>(null);
   const [content, setContent] = useState('');
@@ -128,10 +129,10 @@ export function MarkdownWorkspace({ route, navigate }: PageProps) {
   const [mode, setMode] = useState<EditorMode>('read');
   const [rendered, setRendered] = useState<MarkdownRenderResult>(EMPTY_RENDER);
   const [openDialog, setOpenDialog] = useState<'all' | 'url' | null>(null);
-  const [railOpen, setRailOpen] = useState(() => !isNarrowViewport());
+  const [railOpen, setRailOpen] = useState(() => !isNarrowViewport() && settings.markdownRailOpen);
   const [reviewOpen, setReviewOpen] = useState(false);
   const [reviewIndex, setReviewIndex] = useState(0);
-  const [reviewShowMarks, setReviewShowMarks] = useState(true);
+  const [reviewShowMarks, setReviewShowMarks] = useState(settings.reviewShowMarks);
   const [reviewShowAll, setReviewShowAll] = useState(false);
   const [reviewInlineOpen, setReviewInlineOpen] = useState(false);
   const [findOpen, setFindOpen] = useState(false);
@@ -174,6 +175,19 @@ export function MarkdownWorkspace({ route, navigate }: PageProps) {
     }, 3_200);
   }, []);
 
+  const toggleRail = () => {
+    const next = !railOpen;
+    setRailOpen(next);
+    if (!isNarrowViewport() && settings.markdownRailOpen !== next) {
+      void updateSettings({ markdownRailOpen: next });
+    }
+  };
+
+  const rememberReviewShowMarks = (value: boolean) => {
+    setReviewShowMarks(value);
+    if (settings.reviewShowMarks !== value) void updateSettings({ reviewShowMarks: value });
+  };
+
   const refreshDocuments = useCallback(async () => {
     setDocuments(await documentService.recent(2_000));
   }, []);
@@ -208,12 +222,17 @@ export function MarkdownWorkspace({ route, navigate }: PageProps) {
 
   useEffect(() => {
     const media = window.matchMedia('(max-width: 760px)');
-    const handleViewportChange = (event: MediaQueryListEvent) => {
-      if (event.matches) setRailOpen(false);
+    const applyPreference = () => {
+      setRailOpen(media.matches ? false : settings.markdownRailOpen);
     };
-    media.addEventListener('change', handleViewportChange);
-    return () => media.removeEventListener('change', handleViewportChange);
-  }, []);
+    if (!settingsLoading) applyPreference();
+    media.addEventListener('change', applyPreference);
+    return () => media.removeEventListener('change', applyPreference);
+  }, [settings.markdownRailOpen, settingsLoading]);
+
+  useEffect(() => {
+    if (!settingsLoading) setReviewShowMarks(settings.reviewShowMarks);
+  }, [settings.reviewShowMarks, settingsLoading]);
 
   useEffect(() => () => {
     if (toastTimer.current !== null) window.clearTimeout(toastTimer.current);
@@ -570,7 +589,11 @@ export function MarkdownWorkspace({ route, navigate }: PageProps) {
     setExporting(true);
     setStatus(`正在生成 ${format === 'docx' ? 'Word' : format.toUpperCase()}…`);
     try {
-      const result = await (await getExporter(format)).export({ markdown: currentContent, title });
+      const result = await (await getExporter(format)).export({
+        markdown: currentContent,
+        title,
+        appearance: exportAppearanceFromSettings(settings),
+      });
       downloadBlob(result.blob, result.fileName);
       setStatus(`已下载 ${result.fileName}。`);
       notify(`已导出 ${result.fileName}`, 'success');
@@ -593,7 +616,11 @@ export function MarkdownWorkspace({ route, navigate }: PageProps) {
     markdownPreview.current?.commitActiveEdit();
     const currentContent = contentRef.current;
     try {
-      const exported = await (await getExporter('html')).export({ markdown: currentContent, title });
+      const exported = await (await getExporter('html')).export({
+        markdown: currentContent,
+        title,
+        appearance: exportAppearanceFromSettings(settings),
+      });
       const html = await exported.blob.text();
       if (navigator.clipboard.write && typeof ClipboardItem !== 'undefined') {
         await navigator.clipboard.write([new ClipboardItem({
@@ -975,7 +1002,7 @@ export function MarkdownWorkspace({ route, navigate }: PageProps) {
     >
       <header className="markdown-toolbar" onMouseDownCapture={rememberPreviewSelection}>
         <div className="markdown-toolbar__group markdown-toolbar__documents">
-          <IconButton icon={railOpen ? PanelLeftClose : PanelLeftOpen} label={railOpen ? '收起文件和目录' : '展开文件和目录'} onClick={() => setRailOpen((value) => !value)} />
+          <IconButton icon={railOpen ? PanelLeftClose : PanelLeftOpen} label={railOpen ? '收起文件和目录' : '展开文件和目录'} onClick={toggleRail} />
           <div className="open-file-control">
             <Button className="open-file-control__primary" icon={FileText} onClick={() => void chooseFiles()} size="small">打开文件</Button>
             <details className="open-file-menu" ref={openMenu}>
@@ -1053,7 +1080,7 @@ export function MarkdownWorkspace({ route, navigate }: PageProps) {
                 onRevertAll={revertAllChanges}
                 onSave={() => void saveCurrent()}
                 onSelect={selectReviewChange}
-                onShowMarksChange={setReviewShowMarks}
+                onShowMarksChange={rememberReviewShowMarks}
                 onStep={stepReview}
                 onViewAll={() => { setReviewShowAll(true); setReviewInlineOpen(true); }}
                 onViewCurrent={() => { setReviewShowAll(false); setReviewInlineOpen(true); }}
@@ -1174,7 +1201,7 @@ export function MarkdownWorkspace({ route, navigate }: PageProps) {
 
         {active && !active.needsSource && (reviewChanges.length > 0 || scrollEdges.canGoTop || scrollEdges.canGoBottom) ? (
           <nav aria-label="文档快速导航" className="workspace-float-controls">
-            {!reviewOpen && reviewChanges.length > 0 ? (
+            {!reviewOpen && !reviewInlineOpen && reviewChanges.length > 0 ? (
               <div className="workspace-float-controls__group workspace-float-controls__changes">
                 <IconButton icon={ChevronUp} label="上一处改动" onClick={() => stepReview(-1)} />
                 <button aria-label="打开改动审阅" className="workspace-change-count" onClick={() => { setReviewOpen(true); setReviewInlineOpen(true); }} title="打开改动审阅" type="button"><FileDiff aria-hidden="true" size={15} /><span>{reviewIndex + 1}/{reviewChanges.length}</span></button>

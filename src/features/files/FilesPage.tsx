@@ -29,6 +29,7 @@ import { formatShareText } from '@/features/files/share-text';
 import { documentHandoff } from '@/features/markdown/services/document-handoff';
 import { getExporter } from '@/features/markdown/exporters/registry';
 import type { ExportFormat } from '@/features/markdown/exporters/contract';
+import { exportAppearanceFromSettings } from '@/features/markdown/exporters/export-appearance';
 import type { PageProps } from '@/features/shared/page-props';
 import { db, type ShareRecord } from '@/shared/persistence/database';
 import { documentService } from '@/shared/persistence/document-service';
@@ -83,7 +84,7 @@ function defaultAccess(profile: StorageProfile | undefined): 'private' | 'public
 }
 
 export function FilesPage({ route, navigate }: PageProps) {
-  const { settings } = useSettings();
+  const { settings, update } = useSettings();
   const { resetDestination, setDestination } = useDestination();
   const [tasks, setTasks] = useState<UploadTask[]>([]);
   const [history, setHistory] = useState<ShareRecord[]>([]);
@@ -126,6 +127,10 @@ export function FilesPage({ route, navigate }: PageProps) {
   useEffect(() => {
     setShareAccess(defaultAccess(activeProfile));
   }, [activeProfile]);
+
+  useEffect(() => {
+    setShareFormat(settings.defaultShareFormat);
+  }, [settings.defaultShareFormat]);
 
   useEffect(() => {
     const intent = route.params.get('intent');
@@ -284,7 +289,11 @@ export function FilesPage({ route, navigate }: PageProps) {
     setSharing(true);
     setShareMessage('正在生成文件并上传…');
     try {
-      const exported = await (await getExporter(shareFormat)).export({ markdown: pendingShare.content, title: pendingShare.title });
+      const exported = await (await getExporter(shareFormat)).export({
+        markdown: pendingShare.content,
+        title: pendingShare.title,
+        appearance: exportAppearanceFromSettings(settings),
+      });
       const result = await storageService.upload(activeProfile, {
         blob: exported.blob,
         fileName: exported.fileName,
@@ -302,6 +311,11 @@ export function FilesPage({ route, navigate }: PageProps) {
     } finally {
       setSharing(false);
     }
+  };
+
+  const chooseShareFormat = (format: ExportFormat) => {
+    setShareFormat(format);
+    if (settings.defaultShareFormat !== format) void update({ defaultShareFormat: format });
   };
 
   const loadCloudFiles = async () => {
@@ -351,7 +365,7 @@ export function FilesPage({ route, navigate }: PageProps) {
         <section className="document-share-panel">
           <div className="document-share-panel__heading"><div><p className="page-kicker">在线分享</p><h2>{pendingShare.title}</h2><p>将当前内容生成一个新文件后上传，不会创建在线编辑页。</p></div><IconButton icon={X} label="关闭分享" onClick={() => setPendingShare(null)} /></div>
           <div className="document-share-options">
-            <div><span>分享格式</span><div className="segmented-control"><button aria-pressed={shareFormat === 'html'} onClick={() => setShareFormat('html')} type="button">HTML</button><button aria-pressed={shareFormat === 'docx'} onClick={() => setShareFormat('docx')} type="button">Word</button><button aria-pressed={shareFormat === 'markdown'} onClick={() => setShareFormat('markdown')} type="button">Markdown</button></div></div>
+            <div><span>分享格式</span><div className="segmented-control"><button aria-pressed={shareFormat === 'html'} onClick={() => chooseShareFormat('html')} type="button">HTML</button><button aria-pressed={shareFormat === 'docx'} onClick={() => chooseShareFormat('docx')} type="button">Word</button><button aria-pressed={shareFormat === 'markdown'} onClick={() => chooseShareFormat('markdown')} type="button">Markdown</button></div></div>
             {activeProfile?.provider === 'aliyun-oss' ? <div><span>访问方式</span><div className="segmented-control"><button aria-pressed={shareAccess === 'private'} onClick={() => setShareAccess('private')} type="button">私有限时链接</button><button aria-pressed={shareAccess === 'public'} onClick={() => setShareAccess('public')} type="button">公开链接</button></div></div> : <div><span>访问方式</span><p>访问范围由当前存储服务决定。</p></div>}
           </div>
           {!storageReady ? <div className="inline-warning"><span>在线分享需要先连接存储。</span><Button icon={Settings2} onClick={() => navigate('settings', new URLSearchParams({ section: 'storage' }))} size="small">连接存储</Button></div> : null}

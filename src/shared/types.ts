@@ -63,6 +63,10 @@ export interface AppSettings {
   readingFont: ReadingFont;
   readingFontSize: number;
   readingWidth: number;
+  markdownRailOpen: boolean;
+  markdownFilesOpen: boolean;
+  markdownOutlineOpen: boolean;
+  reviewShowMarks: boolean;
   menuOrder: string[];
   hiddenCapabilities: string[];
   pinnedCapabilities: string[];

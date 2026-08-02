@@ -2,6 +2,16 @@
 
 本项目采用 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/) 的结构，并计划在首个稳定版本后遵循语义化版本。
 
+## [Unreleased]
+
+## [0.1.6] - 2026-08-03
+
+### Changed
+
+- 表格改动审阅改为按表头、行和单元格展示，直接标出当前值与保存前的值，不再默认显示 Markdown 源码。
+- 后续版本只维护、验收和发布 Chrome 插件；自动检查和 GitHub Release 不再生成 Edge 或 Safari 产物。
+- Chrome 会记住阅读外观与工作区显示偏好；导出的 HTML 和在线 HTML 分享会继承当前阅读宽度、字体、字号、主题与强调色。
+
 ## [0.1.5] - 2026-08-03
 
 ### Added

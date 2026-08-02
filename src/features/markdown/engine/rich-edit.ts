@@ -1,4 +1,5 @@
 import type { MarkdownBlock } from '@/features/markdown/engine/render-markdown';
+import { parseMarkdownTable, serializeMarkdownTable } from '@/features/markdown/engine/markdown-table';
 
 const HELPER_SELECTOR = '.rich-selection-toolbar, .markdown-block-tools, .block-source-editor, .inline-review-card, .code-copy-button';
 
@@ -165,34 +166,6 @@ export function moveMarkdownBlock(
   return `${markdown.slice(0, first.from)}${markdown.slice(second.from, second.to)}${separator}${markdown.slice(first.from, first.to)}${markdown.slice(second.to)}`;
 }
 
-function splitTableRow(line: string): string[] {
-  let source = line.trim();
-  if (source.startsWith('|')) source = source.slice(1);
-  if (source.endsWith('|') && !source.endsWith('\\|')) source = source.slice(0, -1);
-  const cells: string[] = [];
-  let current = '';
-  for (let index = 0; index < source.length; index += 1) {
-    const character = source[index];
-    if (character === '\\' && index + 1 < source.length) {
-      current += character + source[index + 1];
-      index += 1;
-    } else if (character === '|') {
-      cells.push(current.trim());
-      current = '';
-    } else {
-      current += character;
-    }
-  }
-  cells.push(current.trim());
-  return cells;
-}
-
-interface MarkdownTable {
-  head: string[];
-  align: Array<'left' | 'center' | 'right' | ''>;
-  rows: string[][];
-}
-
 export type MarkdownTableOperation =
   | 'row-above'
   | 'row-below'
@@ -235,50 +208,6 @@ export type MarkdownBlockTransformKind =
   | 'task-list'
   | 'blockquote'
   | 'code';
-
-function parseMarkdownTable(raw: string): MarkdownTable | null {
-  const lines = raw.trimEnd().split(/\r?\n/).filter((line) => line.trim());
-  if (lines.length < 2 || !/^[\s|:-]+$/.test(lines[1] ?? '')) return null;
-  const head = splitTableRow(lines[0] ?? '');
-  const align = splitTableRow(lines[1] ?? '').map((value) => {
-    const trimmed = value.trim();
-    const left = trimmed.startsWith(':');
-    const right = trimmed.endsWith(':');
-    return left && right ? 'center' : right ? 'right' : left ? 'left' : '';
-  });
-  while (align.length < head.length) align.push('');
-  const rows = lines.slice(2).map((line) => {
-    const cells = splitTableRow(line);
-    while (cells.length < head.length) cells.push('');
-    return cells.slice(0, head.length);
-  });
-  return { head, align: align.slice(0, head.length), rows };
-}
-
-function displayWidth(value: string): number {
-  return [...value].reduce((width, character) => width + ((character.codePointAt(0) ?? 0) > 0xff ? 2 : 1), 0);
-}
-
-function padCell(value: string, width: number): string {
-  return value + ' '.repeat(Math.max(0, width - displayWidth(value)));
-}
-
-function serializeMarkdownTable(table: MarkdownTable): string {
-  const widths = table.head.map((heading, column) => Math.max(
-    3,
-    displayWidth(heading),
-    ...table.rows.map((row) => displayWidth(row[column] ?? '')),
-  ));
-  const line = (cells: string[]) => `| ${cells.map((cell, column) => padCell(cell, widths[column] ?? 3)).join(' | ')} |`;
-  const delimiter = `| ${table.align.map((align, column) => {
-    const width = widths[column] ?? 3;
-    if (align === 'center') return `:${'-'.repeat(Math.max(3, width - 2))}:`;
-    if (align === 'right') return `${'-'.repeat(Math.max(3, width - 1))}:`;
-    if (align === 'left') return `:${'-'.repeat(Math.max(3, width - 1))}`;
-    return '-'.repeat(Math.max(3, width));
-  }).join(' | ')} |`;
-  return [line(table.head), delimiter, ...table.rows.map(line)].join('\n');
-}
 
 export function updateMarkdownTableCell(raw: string, row: number, column: number, value: string): string | null {
   const table = parseMarkdownTable(raw);

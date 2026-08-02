@@ -7,15 +7,13 @@ const OPTIONAL_HOST_PERMISSIONS = ['https://*/*', 'http://*/*'];
 export default defineConfig({
   modules: ['@wxt-dev/module-react'],
   srcDir: 'src',
-  manifest: (env) => ({
+  manifest: {
     name: APP_META.name,
     short_name: APP_META.shortName,
     description: APP_META.description,
     permissions: ['storage', 'downloads'],
-    optional_permissions: env.browser === 'safari'
-      ? ['clipboardWrite', ...OPTIONAL_HOST_PERMISSIONS]
-      : ['clipboardWrite'],
-    ...(env.browser === 'safari' ? {} : { optional_host_permissions: OPTIONAL_HOST_PERMISSIONS }),
+    optional_permissions: ['clipboardWrite'],
+    optional_host_permissions: OPTIONAL_HOST_PERMISSIONS,
     icons: {
       16: 'icon/16.png',
       32: 'icon/32.png',
@@ -29,5 +27,5 @@ export default defineConfig({
         32: 'icon/32.png',
       },
     },
-  }),
+  },
 });

@@ -1,6 +1,6 @@
 # 发布检查清单
 
-本清单用于 GitHub Release、Chrome/Edge 商店包和 Safari 包装发布。每次发布复制一份到 Release Issue，填写实际版本和证据链接。
+本清单用于 GitHub Release 和 Chrome 商店包发布。每次发布复制一份到 Release Issue，填写实际版本和证据链接。
 
 ## 1. 范围与版本
 
@@ -21,15 +21,13 @@ npm run lint
 npm run check
 npm test
 npm run build:chrome
-npm run build:edge
-npm run build:safari
 ```
 
 - [ ] 所有命令退出码为 0。
 - [ ] 依赖安装使用锁文件，未出现未审查的锁文件变更。
 - [ ] `THIRD_PARTY_NOTICES.md` 和 `THIRD_PARTY_LICENSES.txt` 与当前生产依赖一致。
 - [ ] 大体积 chunk 警告已评估，Popup 和首页首屏不加载 OSS、DOCX 或 Mermaid 重模块。
-- [ ] 生成的三个 manifest 权限与预期一致。
+- [ ] 生成的 Chrome manifest 权限与预期一致。
 
 ## 3. 安全与隐私
 
@@ -42,9 +40,9 @@ npm run build:safari
 - [ ] `PRIVACY.md`、`SECURITY.md` 和商店权限说明一致。
 - [ ] GitHub Private vulnerability reporting 已启用。
 
-## 4. Chrome 与 Edge
+## 4. Chrome
 
-分别记录实际浏览器版本、系统版本和测试日期。
+记录实际 Chrome 版本、系统版本和测试日期。
 
 - [ ] 从全新浏览器配置加载打包产物，不使用开发缓存。
 - [ ] Chrome 稳定版通过 `chrome://extensions` 完成一次最终人工加载。Chrome 已不支持测试工具用命令行加载未打包扩展，不能把该工具限制误判为产品验收。
@@ -85,26 +83,16 @@ npm run build:safari
 - [ ] 签名链接有效期不超过临时凭证有效期。
 - [ ] STS 失败时本地编辑和导出继续可用。
 
-## 6. Safari
+## 6. 发布产物
 
-- [ ] 在 macOS 使用当前 Xcode 转换 `.output/safari-mv2`。
-- [ ] 容器 App 和扩展 Target 使用正式唯一 Bundle Identifier。
-- [ ] 签名、启用和重新安装流程通过。
-- [ ] 按 [Safari 构建指南](safari-build.md)完成全部实机流程。
-- [ ] 记录实际 macOS、Xcode、Safari 版本和已知降级。
-- [ ] 未通过实机时，发布说明只写“可生成 Safari 资源”。
-
-## 7. 发布产物
-
-- [ ] Chrome 和 Edge 分别生成 zip，解压后 manifest 位于根目录。
-- [ ] Safari Xcode Archive 来自相同提交和版本。
+- [ ] Chrome zip 解压后 manifest 位于根目录。
 - [ ] 产物中包含图标、隐私/许可入口所需材料，不含源码映射和测试数据。
-- [ ] 为每个产物生成 SHA-256 校验值。
+- [ ] 为 Chrome 产物生成 SHA-256 校验值。
 - [ ] 在全新目录解压并加载一次最终 zip。
 - [ ] Git tag、GitHub Release 标题和附件命名一致。
 - [ ] Release notes 包含新增、修复、已知限制、数据/权限变化和升级说明。
 
-## 8. 发布后
+## 7. 发布后
 
 - [ ] GitHub Release 和商店页面链接可访问。
 - [ ] 安装说明与实际包一致。

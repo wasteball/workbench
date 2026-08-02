@@ -45,18 +45,14 @@ jobs:
           npm run check
           npm test
 
-      - name: Build Safari resources
-        run: npm run build:safari
-
       - name: Build release packages
         shell: bash
         run: |
           npm run zip:chrome
-          npm run zip:edge
           package_version="$(node -p "require('./package.json').version")"
           file_base="workbench-browser-extension-${package_version}"
           cd .output
-          sha256sum "${file_base}-chrome.zip" "${file_base}-edge.zip" > SHA256SUMS.txt
+          sha256sum "${file_base}-chrome.zip" > SHA256SUMS.txt
 
       - name: Verify documented checksums
         shell: bash
@@ -77,7 +73,6 @@ jobs:
           file_base="workbench-browser-extension-${package_version}"
           gh release create "$GITHUB_REF_NAME" \
             ".output/${file_base}-chrome.zip" \
-            ".output/${file_base}-edge.zip" \
             .output/SHA256SUMS.txt \
             --repo "$GITHUB_REPOSITORY" \
             --title "Workbench ${package_version}" \

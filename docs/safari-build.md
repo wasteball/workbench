@@ -1,5 +1,7 @@
 # Safari 构建与验收
 
+> 历史文档：项目从 `0.1.6` 起只维护和发布 Chrome 插件，本指南不再属于当前发布流程。
+
 WXT 可以在任意支持 Node.js 的系统生成 Safari Web Extension 资源，但 Safari App Extension 包装、签名和运行只能在 macOS 与 Xcode 中完成。
 
 ## 1. 生成资源

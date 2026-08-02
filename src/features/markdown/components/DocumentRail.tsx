@@ -1,6 +1,7 @@
 import { useDeferredValue, useEffect, useMemo, useState } from 'react';
 import { ChevronDown, ChevronRight, FileText, Folder, FolderTree, ListTree, Search, Trash2, X } from 'lucide-react';
 
+import { useSettings } from '@/app/settings-context';
 import type { MarkdownHeading } from '@/features/markdown/engine/render-markdown';
 import type { DocumentRecord } from '@/shared/persistence/database';
 import { IconButton } from '@/shared/ui/IconButton';
@@ -121,11 +122,14 @@ export function DocumentRail({
   busy: boolean;
   onHeading: (heading: MarkdownHeading) => void;
 }) {
-  const [filesOpen, setFilesOpen] = useState(true);
-  const [outlineOpen, setOutlineOpen] = useState(true);
+  const { settings, update } = useSettings();
+  const [filesOpen, setFilesOpen] = useState(settings.markdownFilesOpen);
+  const [outlineOpen, setOutlineOpen] = useState(settings.markdownOutlineOpen);
   const [fileQuery, setFileQuery] = useState('');
   const [visibleFileLimit, setVisibleFileLimit] = useState(FILE_RENDER_BATCH);
   const deferredFileQuery = useDeferredValue(fileQuery.trim().toLocaleLowerCase());
+  useEffect(() => setFilesOpen(settings.markdownFilesOpen), [settings.markdownFilesOpen]);
+  useEffect(() => setOutlineOpen(settings.markdownOutlineOpen), [settings.markdownOutlineOpen]);
   const filteredDocuments = useMemo(() => {
     if (!deferredFileQuery) return documents;
     return documents.filter((document) => documentPath(document).join('/').toLocaleLowerCase().includes(deferredFileQuery));
@@ -141,11 +145,23 @@ export function DocumentRail({
   const visibleDocuments = useMemo(() => filteredDocuments.slice(0, visibleFileLimit), [filteredDocuments, visibleFileLimit]);
   const tree = useMemo(() => buildTree(visibleDocuments), [visibleDocuments]);
 
+  const toggleFiles = () => {
+    const next = !filesOpen;
+    setFilesOpen(next);
+    void update({ markdownFilesOpen: next });
+  };
+
+  const toggleOutline = () => {
+    const next = !outlineOpen;
+    setOutlineOpen(next);
+    void update({ markdownOutlineOpen: next });
+  };
+
   return (
     <aside className="document-rail">
       <section className={`document-rail__section document-rail__section--files ${filesOpen ? '' : 'document-rail__section--collapsed'}`}>
         <div className="document-rail__section-header">
-          <button aria-expanded={filesOpen} className="document-rail__section-heading" onClick={() => setFilesOpen((value) => !value)} type="button">
+          <button aria-expanded={filesOpen} className="document-rail__section-heading" onClick={toggleFiles} type="button">
             {filesOpen ? <ChevronDown aria-hidden="true" size={14} /> : <ChevronRight aria-hidden="true" size={14} />}
             <FolderTree aria-hidden="true" size={14} />
             <strong>文件</strong>
@@ -170,7 +186,7 @@ export function DocumentRail({
       </section>
 
       <section className={`document-rail__section document-rail__section--outline ${outlineOpen ? '' : 'document-rail__section--collapsed'}`}>
-        <button aria-expanded={outlineOpen} className="document-rail__section-heading" onClick={() => setOutlineOpen((value) => !value)} type="button">
+        <button aria-expanded={outlineOpen} className="document-rail__section-heading" onClick={toggleOutline} type="button">
           {outlineOpen ? <ChevronDown aria-hidden="true" size={14} /> : <ChevronRight aria-hidden="true" size={14} />}
           <ListTree aria-hidden="true" size={14} />
           <strong>目录</strong>

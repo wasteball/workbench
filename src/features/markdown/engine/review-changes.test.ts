@@ -28,4 +28,50 @@ describe('Markdown change review', () => {
     expect(changes.map((change) => change.kind)).toEqual(['added', 'removed']);
     expect(revertReviewChange(current, changes[0]!)).toBe('第一段\n\n结尾\n');
   });
+
+  it('presents edits across one table as one cell-level change', () => {
+    const baseline = `# 学习计划
+
+| 阶段 | 时长 | 目标 |
+| --- | --- | --- |
+| 入门 | 第 1 周 | 了解产品 |
+| 进阶 | 第 2 周 | 写出方案 |
+`;
+    const current = `# 学习计划
+
+| 阶段 | 时长 | 目标 |
+| --- | --- | --- |
+| 入门 | 第 1 周 | 了解产品和价格 |
+| 进阶 | 第 2 周 | 写出方案 |
+| 实战 | 第 3 周 | 完成项目 |
+`;
+
+    const changes = reviewMarkdownChanges(baseline, current);
+    expect(changes).toHaveLength(1);
+    expect(changes[0]).toMatchObject({
+      kind: 'modified',
+      oldStartLine: 3,
+      newStartLine: 3,
+      table: {
+        modifiedCells: 1,
+        addedRows: 1,
+        removedRows: 0,
+      },
+    });
+    expect(changes[0]!.table?.rows.map((row) => row.kind)).toEqual(['modified', 'same', 'added']);
+    expect(revertReviewChange(current, changes[0]!)).toBe(baseline);
+  });
+
+  it('keeps code-fence replacements out of the structured table comparison', () => {
+    const baseline = '| 阶段 | 时长 |\n| --- | --- |\n| 入门 | 1 周 |\n';
+    const current = '```mermaid\nflowchart TD\n  A[开始] --> B[结束]\n```\n';
+    const [change] = reviewMarkdownChanges(baseline, current);
+
+    expect(change?.kind).toBe('modified');
+    expect(change?.table?.replacement).toBe(true);
+    expect(change?.table?.before?.head).toEqual(['阶段', '时长']);
+    expect(change?.table?.after).toBeNull();
+    expect(revertReviewChange(current, change!)).toBe(baseline);
+  });
+
 });

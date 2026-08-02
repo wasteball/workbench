@@ -26,11 +26,9 @@ npm run lint
 npm run check
 npm test
 npm run build:chrome
-npm run build:edge
-npm run build:safari
 ```
 
-Safari 产物的 Xcode 转换和实机测试只能在 macOS 上完成。
+项目只维护和发布 Chrome 插件。其他浏览器不属于功能实现、兼容性验收或发布范围。
 
 ## 工程边界
 

@@ -44,7 +44,13 @@ import { useSettings } from '@/app/settings-context';
 import { enhanceMermaidDiagrams } from '@/features/markdown/components/enhance-mermaid';
 import { findTextMatches } from '@/features/markdown/engine/find-replace';
 import { renderMarkdown, type MarkdownBlock } from '@/features/markdown/engine/render-markdown';
-import type { ReviewChange } from '@/features/markdown/engine/review-changes';
+import {
+  describeReviewTableChange,
+  type ReviewChange,
+  type ReviewTableCell,
+  type ReviewTableComparison,
+  type ReviewTableRowKind,
+} from '@/features/markdown/engine/review-changes';
 import {
   canEditBlockRichly,
   duplicateMarkdownBlock,
@@ -200,6 +206,79 @@ function preciseReviewDiff(change: ReviewChange): HTMLElement | null {
     element.textContent = part.value;
     detail.append(element);
   }
+  return detail;
+}
+
+function readableTableCell(value: string): string {
+  return value
+    .replace(/<br\s*\/?\s*>/gi, '\n')
+    .replace(/!\[([^\]]*)\]\([^)]*\)/g, '$1')
+    .replace(/\[([^\]]+)\]\([^)]*\)/g, '$1')
+    .replace(/(`+)(.*?)\1/g, '$2')
+    .replace(/\*\*|__|~~/g, '')
+    .replace(/\\([\\|`*_[\]~])/g, '$1')
+    .trim();
+}
+
+function tableCellText(value: string): string {
+  return readableTableCell(value) || '空白';
+}
+
+function appendReviewTableCell(
+  row: HTMLTableRowElement,
+  cell: ReviewTableCell,
+  rowKind: ReviewTableRowKind,
+  header: boolean,
+  first: boolean,
+) {
+  const element = document.createElement(header ? 'th' : 'td');
+  element.dataset.kind = rowKind === 'added' || rowKind === 'removed' ? rowKind : cell.kind;
+  if (first && (rowKind === 'added' || rowKind === 'removed')) {
+    const badge = document.createElement('span');
+    badge.className = 'inline-review-table__row-badge';
+    badge.textContent = rowKind === 'added' ? '新增行' : '已删除';
+    element.append(badge);
+  }
+  const current = document.createElement('span');
+  current.className = 'inline-review-table__value';
+  current.textContent = tableCellText(rowKind === 'removed' || cell.kind === 'removed' ? cell.before : cell.after);
+  element.append(current);
+  if (cell.kind === 'modified') {
+    const previous = document.createElement('small');
+    previous.innerHTML = '<span>原来</span>';
+    previous.append(document.createTextNode(tableCellText(cell.before)));
+    element.append(previous);
+  }
+  row.append(element);
+}
+
+function reviewTableDetail(table: ReviewTableComparison): HTMLElement {
+  const detail = document.createElement('div');
+  detail.className = 'inline-review-table';
+  const summary = document.createElement('p');
+  summary.className = 'inline-review-table__summary';
+  summary.textContent = describeReviewTableChange(table);
+  detail.append(summary);
+
+  const viewport = document.createElement('div');
+  viewport.className = 'inline-review-table__viewport';
+  const comparison = document.createElement('table');
+  comparison.setAttribute('aria-label', '表格改动对比');
+  const head = document.createElement('thead');
+  const headRow = document.createElement('tr');
+  table.head.forEach((cell, index) => appendReviewTableCell(headRow, cell, 'modified', true, index === 0));
+  head.append(headRow);
+  comparison.append(head);
+  const body = document.createElement('tbody');
+  table.rows.forEach((reviewRow) => {
+    const row = document.createElement('tr');
+    row.dataset.kind = reviewRow.kind;
+    reviewRow.cells.forEach((cell, index) => appendReviewTableCell(row, cell, reviewRow.kind, false, index === 0));
+    body.append(row);
+  });
+  comparison.append(body);
+  viewport.append(comparison);
+  detail.append(viewport);
   return detail;
 }
 
@@ -560,6 +639,7 @@ export const MarkdownPreview = memo(forwardRef<MarkdownPreviewHandle, MarkdownPr
     if (!body || !review) return;
     let active = true;
     const inserted: HTMLElement[] = [];
+    const suppressed: HTMLElement[] = [];
     body.querySelectorAll<HTMLElement>('.markdown-block').forEach((block) => block.removeAttribute('data-review-kind'));
 
     review.changes.forEach((change) => {
@@ -576,20 +656,25 @@ export const MarkdownPreview = memo(forwardRef<MarkdownPreviewHandle, MarkdownPr
       const target = findReviewTarget(body, change);
       const card = document.createElement('section');
       card.className = 'inline-review-card';
+      if (change.table) card.classList.add('inline-review-card--table');
       card.dataset.kind = change.kind;
       card.dataset.reviewIndex = String(index);
       const header = document.createElement('header');
-      const badge = change.kind === 'added' ? '新增' : change.kind === 'removed' ? '删除' : '原来';
-      const context = change.kind === 'added' ? '原来没有这一块，卡片下方是现在的内容' : change.kind === 'removed' ? '这里原来的内容已被删除' : '这是保存前的内容，卡片下方是现在的内容';
+      const badge = change.table
+        ? change.kind === 'added' ? '新增表格' : change.kind === 'removed' ? '删除表格' : '表格修改'
+        : change.kind === 'added' ? '新增' : change.kind === 'removed' ? '删除' : '原来';
+      const context = change.table
+        ? describeReviewTableChange(change.table)
+        : change.kind === 'added' ? '原来没有这一块，卡片下方是现在的内容' : change.kind === 'removed' ? '这里原来的内容已被删除' : '这是保存前的内容，卡片下方是现在的内容';
       header.innerHTML = `<strong>${badge}</strong><span>${context}</span>`;
       card.append(header);
-      if (change.before) {
+      if (change.before && !change.table) {
         const ghost = document.createElement('div');
         ghost.className = 'inline-review-card__ghost';
         ghost.innerHTML = (await renderMarkdown(change.before)).html;
         card.append(ghost);
       }
-      const detail = preciseReviewDiff(change);
+      const detail = change.table ? reviewTableDetail(change.table) : preciseReviewDiff(change);
       if (detail) card.append(detail);
       const actions = document.createElement('footer');
       const revert = document.createElement('button');
@@ -617,6 +702,10 @@ export const MarkdownPreview = memo(forwardRef<MarkdownPreviewHandle, MarkdownPr
       if (!active) return;
       if (target) target.before(card);
       else body.append(card);
+      if (target?.dataset.blockType === 'table' && change.table?.after && !change.table.replacement) {
+        target.classList.add('markdown-block--review-suppressed');
+        suppressed.push(target);
+      }
       inserted.push(card);
     }));
 
@@ -628,6 +717,7 @@ export const MarkdownPreview = memo(forwardRef<MarkdownPreviewHandle, MarkdownPr
     return () => {
       active = false;
       inserted.forEach((element) => element.remove());
+      suppressed.forEach((element) => element.classList.remove('markdown-block--review-suppressed'));
       body.querySelectorAll<HTMLElement>('.markdown-block').forEach((block) => block.removeAttribute('data-review-kind'));
     };
   }, [html, review]);

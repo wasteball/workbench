@@ -47,9 +47,3 @@ jobs:
 
       - name: Build Chrome
         run: npx wxt build -b chrome
-
-      - name: Build Edge
-        run: npx wxt build -b edge
-
-      - name: Build Safari resources
-        run: npx wxt build -b safari

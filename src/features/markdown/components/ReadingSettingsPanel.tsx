@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 
 import { useSettings } from '@/app/settings-context';
 import type { AccentColor, ReadingFont } from '@/shared/types';
@@ -22,11 +22,21 @@ export function ReadingSettingsPanel() {
   const updateTimer = useRef<number | null>(null);
   const pendingUpdate = useRef<Parameters<typeof update>[0]>({});
 
+  const flushPendingUpdate = useCallback(() => {
+    if (updateTimer.current !== null) {
+      window.clearTimeout(updateTimer.current);
+      updateTimer.current = null;
+    }
+    const next = pendingUpdate.current;
+    pendingUpdate.current = {};
+    if (Object.keys(next).length > 0) void update(next);
+  }, [update]);
+
   useEffect(() => setFontSize(settings.readingFontSize), [settings.readingFontSize]);
   useEffect(() => setReadingWidth(settings.readingWidth), [settings.readingWidth]);
   useEffect(() => () => {
-    if (updateTimer.current !== null) window.clearTimeout(updateTimer.current);
-  }, []);
+    flushPendingUpdate();
+  }, [flushPendingUpdate]);
 
   useEffect(() => {
     const closeOutside = (event: PointerEvent) => {
@@ -49,12 +59,7 @@ export function ReadingSettingsPanel() {
   const queueUpdate = (patch: Parameters<typeof update>[0]) => {
     pendingUpdate.current = { ...pendingUpdate.current, ...patch };
     if (updateTimer.current !== null) window.clearTimeout(updateTimer.current);
-    updateTimer.current = window.setTimeout(() => {
-      updateTimer.current = null;
-      const next = pendingUpdate.current;
-      pendingUpdate.current = {};
-      void update(next);
-    }, 100);
+    updateTimer.current = window.setTimeout(flushPendingUpdate, 100);
   };
 
   const setFont = (value: ReadingFont) => void update({ readingFont: value });
@@ -77,11 +82,14 @@ export function ReadingSettingsPanel() {
             id="reading-font-size"
             max="26"
             min="14"
+            onBlur={flushPendingUpdate}
             onChange={(event) => {
               const value = Number(event.target.value);
               setFontSize(value);
               queueUpdate({ readingFontSize: value });
             }}
+            onKeyUp={flushPendingUpdate}
+            onPointerUp={flushPendingUpdate}
             step="1"
             type="range"
             value={fontSize}
@@ -94,11 +102,14 @@ export function ReadingSettingsPanel() {
             id="reading-width"
             max="1200"
             min="560"
+            onBlur={flushPendingUpdate}
             onChange={(event) => {
               const value = Number(event.target.value);
               setReadingWidth(value);
               queueUpdate({ readingWidth: value });
             }}
+            onKeyUp={flushPendingUpdate}
+            onPointerUp={flushPendingUpdate}
             step="20"
             type="range"
             value={readingWidth}

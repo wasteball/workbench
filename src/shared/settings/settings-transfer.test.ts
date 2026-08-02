@@ -5,6 +5,21 @@ import { createSettingsExport, parseSettingsImport } from '@/shared/settings/set
 import type { AppSettings } from '@/shared/types';
 
 describe('settings transfer', () => {
+  it('fills newly added browser preferences when importing an older v1 file', () => {
+    const legacySettings = structuredClone(DEFAULT_SETTINGS) as unknown as Record<string, unknown>;
+    delete legacySettings.markdownRailOpen;
+    delete legacySettings.markdownFilesOpen;
+    delete legacySettings.markdownOutlineOpen;
+    delete legacySettings.reviewShowMarks;
+
+    expect(parseSettingsImport({ settings: legacySettings })).toMatchObject({
+      markdownRailOpen: true,
+      markdownFilesOpen: true,
+      markdownOutlineOpen: true,
+      reviewShowMarks: true,
+    });
+  });
+
   it('removes all stored credentials from exports and imports', () => {
     const settings: AppSettings = {
       ...structuredClone(DEFAULT_SETTINGS),

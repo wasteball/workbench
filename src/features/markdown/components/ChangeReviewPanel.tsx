@@ -1,6 +1,6 @@
-import { ChevronsUpDown, ChevronDown, ChevronUp, RotateCcw, Save, X } from 'lucide-react';
+import { ChevronsUpDown, ChevronDown, ChevronUp, RotateCcw, Save, Table2, X } from 'lucide-react';
 
-import type { ReviewChange } from '@/features/markdown/engine/review-changes';
+import { describeReviewTableChange, type ReviewChange } from '@/features/markdown/engine/review-changes';
 import { Button } from '@/shared/ui/Button';
 import { IconButton } from '@/shared/ui/IconButton';
 
@@ -16,6 +16,16 @@ function excerpt(value: string): string {
   const compact = value.replace(/\s+/g, ' ').trim();
   if (!compact) return '空白内容';
   return compact.length > 90 ? `${compact.slice(0, 90)}…` : compact;
+}
+
+function changeTitle(change: ReviewChange): string {
+  if (!change.table) return `第 ${change.newStartLine} 行 · ${CHANGE_LABELS[change.kind]}`;
+  return change.kind === 'added' ? '新增表格' : change.kind === 'removed' ? '删除表格' : '修改表格';
+}
+
+function changeDescription(change: ReviewChange): string {
+  if (!change.table) return excerpt(change.after || change.before);
+  return `${describeReviewTableChange(change.table)} · 文档第 ${change.newStartLine} 行`;
 }
 
 export function ChangeReviewPanel({
@@ -83,8 +93,8 @@ export function ChangeReviewPanel({
           {changes.map((change, index) => (
             <div className={`change-review-item ${index === current ? 'change-review-item--active' : ''}`} data-kind={change.kind} key={change.id}>
               <button aria-current={index === current ? 'true' : undefined} className="change-review-item__trigger" onClick={() => onSelect(index)} type="button">
-                <span className="change-review-item__badge">{change.kind === 'added' ? '+' : change.kind === 'removed' ? '-' : '~'}</span>
-                <span><strong>第 {change.newStartLine} 行 · {CHANGE_LABELS[change.kind]}</strong><small>{excerpt(change.after || change.before)}</small></span>
+                <span className="change-review-item__badge">{change.table ? <Table2 aria-hidden="true" size={16} /> : change.kind === 'added' ? '+' : change.kind === 'removed' ? '-' : '~'}</span>
+                <span><strong>{changeTitle(change)}</strong><small>{changeDescription(change)}</small></span>
               </button>
               <button className="change-review-item__undo" onClick={() => onRevert(change)} title="把这一处恢复到上次保存的样子" type="button">撤回</button>
             </div>
