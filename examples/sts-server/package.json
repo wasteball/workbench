@@ -1,0 +1,13 @@
+{
+  "name": "workbench-sts-server-example",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Minimal self-hosted STS reference server for Workbench.",
+  "engines": {
+    "node": ">=22 <25"
+  },
+  "scripts": {
+    "start": "node server.mjs"
+  }
+}

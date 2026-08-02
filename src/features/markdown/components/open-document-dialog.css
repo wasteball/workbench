@@ -1,0 +1,112 @@
+.dialog-backdrop {
+  position: fixed;
+  z-index: 100;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  padding: 20px;
+  background: rgba(13, 37, 61, 0.38);
+  backdrop-filter: blur(3px);
+}
+
+.open-document-dialog {
+  width: min(610px, 100%);
+  max-height: min(720px, calc(100vh - 40px));
+  overflow: auto;
+  border: 1px solid var(--color-border);
+  border-radius: 8px;
+  padding: 24px;
+  background: var(--color-canvas);
+  box-shadow: var(--shadow-panel);
+}
+
+.open-document-dialog > header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.open-document-dialog h2 {
+  margin: 2px 0 0;
+  font-size: 22px;
+}
+
+.open-source-actions {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+  margin-top: 22px;
+}
+
+.open-source-actions button {
+  display: grid;
+  min-height: 88px;
+  align-items: center;
+  grid-template-columns: 38px minmax(0, 1fr);
+  gap: 10px;
+  border: 1px solid var(--color-border-strong);
+  border-radius: 7px;
+  padding: 14px;
+  background: var(--color-canvas-soft);
+  color: var(--color-primary);
+  text-align: left;
+}
+
+.open-source-actions button:hover:not(:disabled) {
+  border-color: var(--color-primary);
+  background: var(--color-primary-soft);
+}
+
+.open-source-actions span {
+  display: grid;
+  color: var(--color-ink);
+}
+
+.open-source-actions small {
+  color: var(--color-muted);
+  font-size: 12px;
+}
+
+.open-url-form {
+  display: grid;
+  align-items: end;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 10px;
+  border-top: 1px solid var(--color-border);
+  margin-top: 22px;
+  padding-top: 20px;
+}
+
+.url-input-row {
+  display: grid;
+  align-items: center;
+  grid-template-columns: 24px minmax(0, 1fr);
+  border: 1px solid var(--color-border-strong);
+  border-radius: 6px;
+  padding-left: 9px;
+  color: var(--color-muted);
+}
+
+.url-input-row input {
+  border: 0;
+}
+
+.dialog-error {
+  margin: 12px 0 0;
+  color: var(--color-danger);
+  font-size: 13px;
+}
+
+.open-document-dialog > footer {
+  margin-top: 18px;
+  color: var(--color-muted);
+  font-size: 12px;
+}
+
+@media (max-width: 560px) {
+  .open-source-actions,
+  .open-url-form {
+    grid-template-columns: 1fr;
+  }
+}

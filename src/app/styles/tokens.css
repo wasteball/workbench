@@ -1,0 +1,56 @@
+:root {
+  color-scheme: light;
+  --color-primary: #533afd;
+  --color-primary-hover: #4434d4;
+  --color-primary-soft: #eeecff;
+  --color-ink: #0d253d;
+  --color-ink-secondary: #31445a;
+  --color-muted: #64748d;
+  --color-canvas: #ffffff;
+  --color-canvas-soft: #f6f9fc;
+  --color-canvas-raised: #ffffff;
+  --color-border: #e3e8ee;
+  --color-border-strong: #c8d3df;
+  --color-success: #147d64;
+  --color-success-soft: #e8f7f2;
+  --color-warning: #946200;
+  --color-warning-soft: #fff5d8;
+  --color-danger: #c33d5b;
+  --color-danger-soft: #fff0f3;
+  --shadow-panel: 0 12px 32px rgba(0, 55, 112, 0.08), 0 2px 8px rgba(0, 55, 112, 0.05);
+  --font-ui: Inter, "SF Pro Text", -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
+  --font-document: Charter, "Source Han Serif SC", "Songti SC", Georgia, serif;
+  --font-mono: "JetBrains Mono", "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+  --radius-xs: 4px;
+  --radius-sm: 6px;
+  --radius-md: 8px;
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 24px;
+  --space-6: 32px;
+  --space-7: 48px;
+}
+
+:root[data-theme='dark'] {
+  color-scheme: dark;
+  --color-primary: #8b7cff;
+  --color-primary-hover: #a99fff;
+  --color-primary-soft: #29264b;
+  --color-ink: #edf3f8;
+  --color-ink-secondary: #c5d0db;
+  --color-muted: #92a2b3;
+  --color-canvas: #121821;
+  --color-canvas-soft: #181f29;
+  --color-canvas-raised: #202936;
+  --color-border: #2c3846;
+  --color-border-strong: #425265;
+  --color-success: #57c8a9;
+  --color-success-soft: #173c34;
+  --color-warning: #e6bd63;
+  --color-warning-soft: #3d321b;
+  --color-danger: #ff8da7;
+  --color-danger-soft: #43232d;
+  --shadow-panel: 0 16px 40px rgba(0, 0, 0, 0.24);
+}

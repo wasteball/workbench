@@ -1,0 +1,114 @@
+.tools-page {
+  max-width: 1100px;
+}
+
+.tool-form-section {
+  border-block: 1px solid var(--color-border);
+  padding: 24px 0;
+}
+
+.tool-form {
+  display: grid;
+  align-items: end;
+  grid-template-columns: 82px minmax(150px, 0.7fr) minmax(260px, 1.3fr) auto;
+  gap: 12px;
+}
+
+.tool-form__actions,
+.custom-tool-row__actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.tool-form label,
+.settings-field {
+  display: grid;
+  gap: 6px;
+}
+
+.tool-form label > span,
+.settings-field > span {
+  color: var(--color-ink-secondary);
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.tool-form input,
+.settings-field input,
+.settings-field select,
+.settings-field textarea {
+  width: 100%;
+  min-height: 40px;
+  border: 1px solid var(--color-border-strong);
+  border-radius: 6px;
+  padding: 8px 11px;
+  background: var(--color-canvas);
+}
+
+.tool-form input:focus,
+.settings-field input:focus,
+.settings-field select:focus,
+.settings-field textarea:focus {
+  border-color: var(--color-primary);
+}
+
+.form-error {
+  margin: 10px 0 0;
+  color: var(--color-danger);
+  font-size: 13px;
+}
+
+.tool-list-section {
+  margin-top: 34px;
+}
+
+.custom-tool-list {
+  border-top: 1px solid var(--color-border);
+}
+
+.custom-tool-row {
+  display: grid;
+  min-height: 66px;
+  align-items: center;
+  grid-template-columns: 40px minmax(0, 1fr) auto;
+  gap: 12px;
+  border-bottom: 1px solid var(--color-border);
+  padding: 8px 4px;
+}
+
+.custom-tool-row__icon {
+  display: grid;
+  width: 38px;
+  height: 38px;
+  place-items: center;
+  border-radius: 7px;
+  background: var(--color-primary-soft);
+}
+
+.custom-tool-row > span:nth-child(2) {
+  display: grid;
+  min-width: 0;
+}
+
+.custom-tool-row small {
+  overflow: hidden;
+  color: var(--color-muted);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+@media (max-width: 760px) {
+  .tool-form {
+    grid-template-columns: 72px minmax(0, 1fr);
+  }
+
+  .tool-form__url {
+    grid-column: 1 / -1;
+  }
+
+  .tool-form__actions {
+    grid-column: 1 / -1;
+    justify-self: start;
+  }
+}
