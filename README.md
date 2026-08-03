@@ -12,14 +12,14 @@ Workbench 是一个在浏览器里使用的文档工作台。你可以直接打�
 | --- | --- |
 | Chrome | 唯一维护目标，商店版准备中 |
 
-当前发布的 `0.1.7` 是商店上线前的公开预览版。Chrome 用户可以[下载预览版](https://github.com/wasteball/workbench/releases/tag/v0.1.7)，按照页面中的安装说明提前体验。Workbench 只维护、验收和发布 Chrome 插件。
+当前发布的 `0.1.8` 是商店上线前的公开预览版。Chrome 用户可以[下载预览版](https://github.com/wasteball/workbench/releases/tag/v0.1.8)，按照页面中的安装说明提前体验。Workbench 只维护、验收和发布 Chrome 插件。
 
 <details>
 <summary>安装 Chrome 公开预览版</summary>
 
 预览版尚未进入浏览器商店，因此需要手动加载一次：
 
-1. 在[发布页面](https://github.com/wasteball/workbench/releases/tag/v0.1.7)下载文件名包含 `chrome` 的 ZIP 文件。
+1. 在[发布页面](https://github.com/wasteball/workbench/releases/tag/v0.1.8)下载文件名包含 `chrome` 的 ZIP 文件。
 2. 右键 ZIP 文件并选择“全部解压”。
 3. 在 Chrome 地址栏打开 `chrome://extensions`。
 4. 开启页面上的“开发者模式”。
@@ -81,7 +81,7 @@ Workbench 是一个在浏览器里使用的文档工作台。你可以直接打�
 
 ## 当前版本说明
 
-`0.1.7` 是当前公开预览版，只提供 Chrome 安装包。尚未迁移的旧版能力记录在[功能迁移矩阵](docs/feature-migration.md)中。
+`0.1.8` 是当前公开预览版，只提供 Chrome 安装包。尚未迁移的旧版能力记录在[功能迁移矩阵](docs/feature-migration.md)中。
 
 发现问题可以提交 [GitHub Issue](https://github.com/wasteball/workbench/issues)。安全问题请按[安全策略](SECURITY.md)私下报告。
 

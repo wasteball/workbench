@@ -12,7 +12,7 @@ vi.mock('@/features/markdown/components/enhance-mermaid', () => ({
   enhanceMermaidDiagrams: vi.fn(async () => []),
 }));
 
-import { findReviewNavigationTarget, MarkdownPreview } from '@/features/markdown/components/MarkdownPreview';
+import { findReviewNavigationTarget, MarkdownPreview, patchPreviewBody } from '@/features/markdown/components/MarkdownPreview';
 import { renderMarkdown } from '@/features/markdown/engine/render-markdown';
 import { reviewMarkdownChanges, type ReviewChange } from '@/features/markdown/engine/review-changes';
 
@@ -32,6 +32,37 @@ const change: ReviewChange = {
 afterEach(() => {
   cleanup();
   vi.unstubAllGlobals();
+});
+
+describe('patchPreviewBody', () => {
+  it('updates a changed table without rebuilding the surrounding document', async () => {
+    const beforeMarkdown = '# Document\n\n| Name |\n| --- |\n| Before |\n\n## Stable\n\nKeep this paragraph mounted.';
+    const afterMarkdown = '# Document\n\n| Name |\n| --- |\n| After with a longer value |\n\n## Stable\n\nKeep this paragraph mounted.';
+    const [before, after] = await Promise.all([renderMarkdown(beforeMarkdown), renderMarkdown(afterMarkdown)]);
+    const body = document.createElement('div');
+    body.innerHTML = before.html;
+    document.body.append(body);
+
+    try {
+      const stableHeading = body.querySelector('#stable')?.closest<HTMLElement>('.markdown-block');
+      if (!stableHeading) throw new Error('Stable heading was not rendered.');
+      const enhancement = document.createElement('span');
+      enhancement.dataset.enhanced = '';
+      stableHeading.append(enhancement);
+
+      const expected = document.createElement('div');
+      expected.innerHTML = after.html;
+      const expectedHeading = expected.querySelector('#stable')?.closest<HTMLElement>('.markdown-block');
+
+      expect(patchPreviewBody(body, after.html, before.html)).toBe(true);
+      expect(body.querySelector('#stable')?.closest('.markdown-block')).toBe(stableHeading);
+      expect(enhancement.isConnected).toBe(true);
+      expect(body.querySelector('table')).toHaveTextContent('After with a longer value');
+      expect(stableHeading.dataset.sourceFrom).toBe(expectedHeading?.dataset.sourceFrom);
+    } finally {
+      body.remove();
+    }
+  });
 });
 
 describe('findReviewNavigationTarget', () => {

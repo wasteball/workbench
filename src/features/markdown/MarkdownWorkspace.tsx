@@ -1206,10 +1206,10 @@ export function MarkdownWorkspace({ route, navigate }: PageProps) {
 
         {active && !active.needsSource && (reviewChanges.length > 0 || scrollEdges.canGoTop || scrollEdges.canGoBottom) ? (
           <nav aria-label="文档快速导航" className="workspace-float-controls">
-            {!reviewOpen && !reviewInlineOpen && reviewChanges.length > 0 ? (
+            {reviewChanges.length > 0 ? (
               <div className="workspace-float-controls__group workspace-float-controls__changes">
                 <IconButton icon={ChevronUp} label="上一处改动" onClick={() => stepReview(-1)} />
-                <button aria-label="打开改动审阅" className="workspace-change-count" onClick={() => { setReviewOpen(true); setReviewInlineOpen(true); }} title="打开改动审阅" type="button"><FileDiff aria-hidden="true" size={15} /><span>{reviewIndex + 1}/{reviewChanges.length}</span></button>
+                <button aria-label="打开改动审阅" className="workspace-change-count" onClick={() => { setReviewOpen(true); selectReviewChange(reviewIndex); }} title="打开改动审阅" type="button"><FileDiff aria-hidden="true" size={15} /><span>{reviewIndex + 1}/{reviewChanges.length}</span></button>
                 <IconButton icon={ChevronDown} label="下一处改动" onClick={() => stepReview(1)} />
               </div>
             ) : null}

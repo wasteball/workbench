@@ -176,8 +176,82 @@ const SEARCH_HIGHLIGHT = 'workbench-find-match';
 const CURRENT_SEARCH_HIGHLIGHT = 'workbench-find-current';
 const SEARCH_SKIP = 'button, .mermaid-figure__source, .inline-review-card, .block-source-editor, .markdown-block-tools, .rich-selection-toolbar, .markdown-insert-menu, .markdown-table-tools, .markdown-table-menu';
 
+function directPreviewBlocks(root: DocumentFragment | HTMLElement): HTMLElement[] {
+  return [...root.children].filter((element): element is HTMLElement => element instanceof HTMLElement && element.classList.contains('markdown-block'));
+}
+
+function parsePreviewBlocks(html: string): HTMLElement[] {
+  const template = document.createElement('template');
+  template.innerHTML = html;
+  return directPreviewBlocks(template.content);
+}
+
+function updateBlockMetadata(current: HTMLElement, next: HTMLElement) {
+  for (const attribute of ['data-block-index', 'data-block-type', 'data-source-from', 'data-source-to']) {
+    const value = next.getAttribute(attribute);
+    if (value === null) current.removeAttribute(attribute);
+    else current.setAttribute(attribute, value);
+  }
+}
+
+export function patchPreviewBody(body: HTMLElement, html: string, previousHtml: string): boolean {
+  if (!previousHtml || body.childNodes.length === 0) {
+    body.innerHTML = html;
+    return false;
+  }
+
+  const previousBlocks = parsePreviewBlocks(previousHtml);
+  const nextBlocks = parsePreviewBlocks(html);
+  if (previousBlocks.length !== nextBlocks.length || previousBlocks.length === 0) {
+    body.innerHTML = html;
+    return false;
+  }
+
+  const changed = nextBlocks.filter((nextBlock, index) => {
+    const previousBlock = previousBlocks[index];
+    return !previousBlock
+      || previousBlock.dataset.blockIndex !== nextBlock.dataset.blockIndex
+      || previousBlock.dataset.blockType !== nextBlock.dataset.blockType
+      || previousBlock.innerHTML !== nextBlock.innerHTML;
+  });
+  const currentBlocks = new Map(directPreviewBlocks(body).map((block) => [block.dataset.blockIndex, block]));
+
+  if (changed.length === 0) {
+    nextBlocks.forEach((nextBlock) => {
+      const current = currentBlocks.get(nextBlock.dataset.blockIndex);
+      if (current) updateBlockMetadata(current, nextBlock);
+    });
+    return true;
+  }
+
+  if (changed.length === 1 && changed[0]?.dataset.blockType === 'table') {
+    const nextTable = changed[0];
+    const currentTable = currentBlocks.get(nextTable.dataset.blockIndex);
+    if (currentTable) {
+      nextBlocks.forEach((nextBlock) => {
+        const current = currentBlocks.get(nextBlock.dataset.blockIndex);
+        if (current && current !== currentTable) updateBlockMetadata(current, nextBlock);
+      });
+      currentTable.replaceWith(nextTable.cloneNode(true));
+      return true;
+    }
+  }
+
+  body.innerHTML = html;
+  return false;
+}
+
 const PreviewBody = memo(forwardRef<HTMLDivElement, { html: string }>(function PreviewBody({ html }, ref) {
-  return <div className="markdown-preview__body" dangerouslySetInnerHTML={{ __html: html }} ref={ref} />;
+  const bodyRef = useRef<HTMLDivElement>(null);
+  const previousHtml = useRef('');
+  useImperativeHandle(ref, () => bodyRef.current as HTMLDivElement, []);
+  useLayoutEffect(() => {
+    const body = bodyRef.current;
+    if (!body) return;
+    patchPreviewBody(body, html, previousHtml.current);
+    previousHtml.current = html;
+  }, [html]);
+  return <div className="markdown-preview__body" ref={bodyRef} />;
 }));
 
 function unwrapSearchMarks(root: HTMLElement) {
