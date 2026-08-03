@@ -396,13 +396,13 @@ export function SettingsPage({ route, navigate }: PageProps) {
 
             {profileDraft ? (
               <section className="storage-form">
-                <div className="storage-form__status"><div><strong>{profileDraft.provider === 'gateway' ? '单位或服务提供的连接' : '我的阿里云存储'}</strong><p>{profileDraft.provider === 'gateway' ? '只有管理员或服务提供者给过你连接信息时才需要填写。' : '按照阿里云存储页面中的信息填写，用于上传和生成分享链接。'}</p></div><StatusPill tone={isStorageProfileConfigured(profileDraft) ? 'success' : 'warning'}>{isStorageProfileConfigured(profileDraft) ? '可以使用' : '尚未配置'}</StatusPill></div>
+                <div className="storage-form__status"><div><strong>{profileDraft.provider === 'gateway' ? '单位或服务提供的连接' : '我的阿里云存储'}</strong><p>{profileDraft.provider === 'gateway' ? '参考旧版 MD·HTML：填写完整的上传接口地址、Bucket 和用户标识；不要把这个地址填到阿里云 Endpoint。' : '个人直接连接阿里云：地域填 oss-cn-…，Endpoint 通常留空，再填写 Bucket 和 AccessKey。'}</p></div><StatusPill tone={isStorageProfileConfigured(profileDraft) ? 'success' : 'warning'}>{isStorageProfileConfigured(profileDraft) ? '可以使用' : '尚未配置'}</StatusPill></div>
                 <div className="storage-fields">
                   <label className="settings-field settings-field--wide"><span>连接名称</span><input onChange={(event) => setDraft({ name: event.target.value })} value={profileDraft.name} /></label>
 
                   {profileDraft.provider === 'gateway' ? (
                     <>
-                      <label className="settings-field settings-field--wide"><span>上传地址</span><input inputMode="url" onChange={(event) => setDraft({ apiUrl: event.target.value })} placeholder="由管理员或服务提供者提供" value={profileDraft.apiUrl} /></label>
+                      <label className="settings-field settings-field--wide"><span>上传地址</span><input inputMode="url" onChange={(event) => setDraft({ apiUrl: event.target.value })} placeholder="完整的上传接口地址，例如 https://…/upload" value={profileDraft.apiUrl} /></label>
                       <label className="settings-field"><span>存储空间名称</span><input onChange={(event) => setDraft({ bucket: event.target.value })} placeholder="由管理员提供" value={profileDraft.bucket} /></label>
                       <label className="settings-field"><span>用户标识</span><input onChange={(event) => setDraft({ userCode: event.target.value })} placeholder="由管理员提供" value={profileDraft.userCode} /></label>
                       <label className="setting-toggle"><input checked={profileDraft.cdn} onChange={(event) => setDraft({ cdn: event.target.checked })} type="checkbox" /><span><strong>使用加速地址</strong><small>仅在服务提供者要求时开启</small></span></label>
@@ -416,7 +416,7 @@ export function SettingsPage({ route, navigate }: PageProps) {
 
                       {profileDraft.credentialMode === 'access-key' ? (
                         <>
-                          <div className="security-notice settings-field--wide"><ShieldCheck aria-hidden="true" size={19} /><p><strong>请为 Workbench 单独创建权限受限的访问密钥。</strong>不要填写阿里云主账号的密钥；不确定时先不要开启云端分享。</p></div>
+                          <div className="security-notice settings-field--wide"><ShieldCheck aria-hidden="true" size={19} /><p><strong>请为 Workbench 单独创建权限受限的访问密钥。</strong>不要填写阿里云主账号的密钥；不确定时先不要开启云端分享。浏览器扩展还需要在 OSS 跨域规则中允许当前扩展来源。</p></div>
                           <label className="settings-field"><span>访问身份（AccessKey ID）</span><input autoComplete="off" onChange={(event) => setDraft({ accessKeyId: event.target.value })} value={profileDraft.accessKeyId} /></label>
                           <label className="settings-field secret-field"><span>访问密钥（AccessKey Secret）</span><span className="secret-input"><input autoComplete="new-password" onChange={(event) => setDraft({ accessKeySecret: event.target.value })} type={showSecret ? 'text' : 'password'} value={profileDraft.accessKeySecret} /><IconButton icon={showSecret ? EyeOff : Eye} label={showSecret ? '隐藏访问密钥' : '显示访问密钥'} onClick={() => setShowSecret((value) => !value)} /></span></label>
                           <label className="setting-toggle settings-field--wide"><input checked={profileDraft.rememberAccessKey} onChange={(event) => setDraft({ rememberAccessKey: event.target.checked })} type="checkbox" /><span><strong>在此浏览器记住访问密钥</strong><small>关闭时，浏览器完全退出后需要重新填写</small></span></label>
