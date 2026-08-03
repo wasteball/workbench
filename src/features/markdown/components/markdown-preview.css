@@ -6,7 +6,7 @@
 .markdown-preview__body {
   width: min(var(--reading-width, 860px), 100%);
   margin: 0 auto;
-  padding: 52px clamp(28px, 6vw, 72px) 90px;
+  padding: 56px clamp(30px, 6vw, 74px) 96px;
   color: var(--color-ink);
   font-family: var(--font-document);
   font-size: var(--reading-font-size, 18px);
@@ -28,7 +28,7 @@
 
 .markdown-block {
   position: relative;
-  border-radius: 7px;
+  border-radius: 6px;
 }
 
 .markdown-preview__surface--editable .markdown-block {
@@ -76,23 +76,24 @@
   font-family: var(--font-ui);
   letter-spacing: 0;
   line-height: 1.3;
+  font-weight: 650;
 }
 
 .markdown-preview__body h1 {
-  margin: 0 0 28px;
-  padding-bottom: 15px;
+  margin: 0 0 30px;
+  padding-bottom: 17px;
   border-bottom: 1px solid var(--color-border);
-  font-size: 32px;
+  font-size: 34px;
 }
 
 .markdown-preview__body h2 {
-  margin: 42px 0 16px;
-  font-size: 24px;
+  margin: 44px 0 16px;
+  font-size: 23px;
 }
 
 .markdown-preview__body h3 {
   margin: 32px 0 12px;
-  font-size: 19px;
+  font-size: 18px;
 }
 
 .markdown-preview__body h4 {
@@ -123,7 +124,9 @@
 
 .markdown-preview__body blockquote {
   border-left: 3px solid var(--color-primary);
-  padding: 4px 0 4px 18px;
+  border-radius: 0 6px 6px 0;
+  padding: 8px 14px 8px 18px;
+  background: color-mix(in srgb, var(--color-primary-soft) 42%, transparent);
   color: var(--color-ink-secondary);
 }
 
@@ -133,7 +136,7 @@
   border: 1px solid var(--color-border);
   border-radius: 7px;
   padding: 0 0.95em;
-  background: color-mix(in srgb, var(--color-primary) 4%, var(--color-canvas));
+  background: var(--color-canvas-soft);
 }
 
 .markdown-preview__body details > summary {
@@ -178,8 +181,8 @@
   border: 1px solid var(--color-border);
   border-radius: 7px;
   padding: 18px;
-  background: #142131;
-  color: #dbe6ef;
+  background: var(--color-code-surface);
+  color: var(--color-code-ink);
   font-family: var(--font-mono);
   font-size: 13px;
   line-height: 1.6;
@@ -208,7 +211,7 @@
   border: 1px solid rgba(255, 255, 255, 0.2);
   border-radius: 5px;
   padding: 3px 8px;
-  background: rgba(13, 37, 61, 0.78);
+  background: rgba(17, 18, 16, 0.78);
   color: #fff;
   font-family: var(--font-ui);
   font-size: 11px;
@@ -241,7 +244,7 @@
 }
 
 .markdown-preview__body th {
-  background: var(--color-canvas-soft);
+  background: color-mix(in srgb, var(--color-canvas-soft) 86%, var(--color-canvas-raised));
   font-weight: 650;
 }
 
@@ -296,7 +299,7 @@
   overflow: hidden;
   border: 1px solid var(--color-border);
   border-radius: 8px;
-  background: var(--color-canvas-soft);
+  background: var(--color-canvas-raised);
 }
 
 .mermaid-figure__header {
@@ -328,7 +331,7 @@
   border: 1px solid var(--color-border);
   border-radius: 5px;
   padding: 0;
-  background: var(--color-canvas);
+  background: var(--color-canvas-raised);
   color: var(--color-ink-secondary);
   cursor: pointer;
 }
@@ -349,7 +352,7 @@
   position: relative;
   min-height: 160px;
   overflow: hidden;
-  background: var(--color-canvas);
+  background: var(--color-canvas-raised);
   cursor: grab;
   touch-action: none;
   user-select: none;
@@ -382,8 +385,8 @@
   border: 1px solid var(--color-border);
   border-radius: 7px;
   padding: 3px;
-  background: color-mix(in srgb, var(--color-canvas) 88%, transparent);
-  box-shadow: var(--shadow-panel);
+  background: color-mix(in srgb, var(--color-canvas-raised) 90%, transparent);
+  box-shadow: var(--shadow-soft);
   opacity: 0;
   pointer-events: none;
   transform: translateY(-3px);
@@ -511,7 +514,7 @@
 .markdown-block-menu button:hover:not(:disabled),
 .markdown-table-menu button:hover:not(:disabled) {
   background: var(--color-canvas-soft);
-  color: var(--color-primary);
+  color: var(--color-ink);
 }
 
 .markdown-block-menu button:disabled,
@@ -581,7 +584,7 @@
 .markdown-insert-menu button:hover,
 .markdown-insert-menu button:focus-visible {
   background: var(--color-canvas-soft);
-  color: var(--color-primary);
+  color: var(--color-ink);
 }
 
 .markdown-insert-menu button span {
@@ -631,7 +634,7 @@
   overflow: hidden;
   border: 1px solid var(--color-primary);
   border-radius: 8px;
-  background: var(--color-canvas-soft);
+  background: var(--color-canvas-raised);
 }
 
 .block-source-editor header {
@@ -666,8 +669,8 @@
 }
 
 .block-source-editor header button:first-child {
-  background: var(--color-primary);
-  color: #fff;
+  background: var(--color-action);
+  color: var(--color-on-action);
 }
 
 .block-source-editor textarea {
@@ -700,7 +703,7 @@
   border: 1px solid var(--color-border);
   border-left: 3px solid #b16b00;
   border-radius: 7px;
-  background: var(--color-canvas-soft);
+  background: var(--color-canvas-raised);
   font-family: var(--font-ui);
 }
 
@@ -754,7 +757,7 @@
   overflow: auto;
   border-top: 1px dashed var(--color-border);
   padding: 8px 12px;
-  background: var(--color-canvas);
+  background: var(--color-canvas-soft);
   color: var(--color-muted);
   font-family: var(--font-mono);
   font-size: 11px;
@@ -784,7 +787,7 @@
 }
 
 .inline-review-card--table {
-  background: var(--color-canvas);
+  background: var(--color-canvas-raised);
 }
 
 .inline-review-table {
@@ -792,7 +795,7 @@
   min-width: 0;
   gap: 8px;
   padding: 10px;
-  background: var(--color-canvas);
+  background: var(--color-canvas-raised);
 }
 
 .inline-review-table__summary {
@@ -826,7 +829,7 @@
   max-width: 360px;
   border-width: 0 1px 1px 0;
   padding: 9px 10px;
-  background: var(--color-canvas);
+  background: var(--color-canvas-raised);
   color: var(--color-ink);
   line-height: 1.45;
   overflow-wrap: anywhere;
@@ -849,18 +852,18 @@
 }
 
 .markdown-preview__body .inline-review-table [data-kind='modified'] {
-  background: color-mix(in srgb, #b16b00 11%, var(--color-canvas));
+  background: color-mix(in srgb, #b16b00 11%, var(--color-canvas-raised));
   box-shadow: inset 0 0 0 1px color-mix(in srgb, #b16b00 34%, transparent);
 }
 
 .markdown-preview__body .inline-review-table tr[data-kind='added'] > *,
 .markdown-preview__body .inline-review-table [data-kind='added'] {
-  background: color-mix(in srgb, #16845b 10%, var(--color-canvas));
+  background: color-mix(in srgb, #16845b 10%, var(--color-canvas-raised));
 }
 
 .markdown-preview__body .inline-review-table tr[data-kind='removed'] > *,
 .markdown-preview__body .inline-review-table [data-kind='removed'] {
-  background: color-mix(in srgb, #c13e4a 9%, var(--color-canvas));
+  background: color-mix(in srgb, #c13e4a 9%, var(--color-canvas-raised));
   color: var(--color-muted);
 }
 
@@ -915,7 +918,7 @@ tr[data-kind='added'] .inline-review-table__row-badge {
   border: 1px solid var(--color-border);
   border-radius: 5px;
   padding: 3px 8px;
-  background: var(--color-canvas);
+  background: var(--color-canvas-raised);
   color: var(--color-ink-secondary);
   font-size: 10px;
 }

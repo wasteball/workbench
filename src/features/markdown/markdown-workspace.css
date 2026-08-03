@@ -3,8 +3,8 @@
   display: grid;
   height: calc(100vh - 64px);
   min-height: 520px;
-  grid-template-rows: 58px minmax(0, 1fr) 30px;
-  background: var(--color-canvas);
+  grid-template-rows: 60px minmax(0, 1fr) 30px;
+  background: var(--color-canvas-soft);
 }
 
 .markdown-toolbar {
@@ -16,8 +16,8 @@
   grid-template-columns: auto minmax(130px, 1fr) auto auto auto;
   gap: 8px;
   border-bottom: 1px solid var(--color-border);
-  padding: 8px 12px;
-  background: var(--color-canvas);
+  padding: 9px 14px;
+  background: var(--color-canvas-raised);
 }
 
 .markdown-toolbar__group {
@@ -66,7 +66,8 @@
 .open-file-menu[open] summary,
 .open-file-menu summary:hover,
 .open-file-menu summary:focus-visible {
-  color: var(--color-primary);
+  background: var(--color-canvas-soft);
+  color: var(--color-ink);
 }
 
 .open-file-menu__panel {
@@ -79,7 +80,7 @@
   overflow: hidden;
   border: 1px solid var(--color-border);
   border-radius: 8px;
-  background: var(--color-canvas);
+  background: var(--color-canvas-raised);
   box-shadow: var(--shadow-panel);
 }
 
@@ -105,7 +106,7 @@
 .open-file-menu__panel button:hover,
 .open-file-menu__panel button:focus-visible {
   background: var(--color-canvas-soft);
-  color: var(--color-primary);
+  color: var(--color-ink);
 }
 
 .open-file-menu__panel button span {
@@ -149,25 +150,26 @@
   background: transparent;
   color: var(--color-muted);
   font-size: 11px;
-  font-weight: 650;
+  font-weight: 620;
   white-space: nowrap;
 }
 
 .workspace-mode-switch button:hover,
 .workspace-mode-switch button:focus-visible {
-  color: var(--color-primary);
+  color: var(--color-ink);
 }
 
 .workspace-mode-switch button.is-active {
-  background: var(--color-canvas);
-  box-shadow: 0 1px 3px rgba(13, 37, 61, 0.12);
-  color: var(--color-primary);
+  background: var(--color-canvas-raised);
+  box-shadow: 0 1px 3px rgba(48, 43, 34, 0.08), inset 0 -2px var(--color-primary);
+  color: var(--color-ink);
 }
 
 .review-toggle--active.ui-button {
-  border-color: color-mix(in srgb, var(--color-primary) 38%, var(--color-border));
-  background: var(--color-primary-soft);
-  color: var(--color-primary);
+  border-color: var(--color-border-strong);
+  background: var(--color-canvas-soft);
+  box-shadow: inset 0 -2px var(--color-primary);
+  color: var(--color-ink);
 }
 
 .change-review-control {
@@ -187,7 +189,7 @@
   padding: 6px 10px;
   background: transparent;
   color: var(--color-ink);
-  font-weight: 600;
+  font-weight: 620;
   text-align: center;
   text-overflow: ellipsis;
 }
@@ -195,7 +197,7 @@
 .document-title-field input:hover:not(:disabled),
 .document-title-field input:focus {
   border-color: var(--color-border-strong);
-  background: var(--color-canvas-soft);
+  background: var(--color-canvas-raised);
 }
 
 .markdown-workspace__body {
@@ -203,7 +205,7 @@
   display: grid;
   min-width: 0;
   min-height: 0;
-  grid-template-columns: 232px minmax(0, 1fr);
+  grid-template-columns: 240px minmax(0, 1fr);
 }
 
 .document-rail-scrim {
@@ -222,7 +224,7 @@
   display: grid;
   min-width: 0;
   min-height: 0;
-  background: var(--color-canvas);
+  background: var(--color-canvas-soft);
 }
 
 .editor-pane,
@@ -234,12 +236,12 @@
 
 .editor-pane {
   border-right: 1px solid var(--color-border);
-  background: var(--color-canvas);
+  background: var(--color-canvas-raised);
 }
 
 .editor-pane .cm-editor {
   height: 100%;
-  background: var(--color-canvas);
+  background: var(--color-canvas-raised);
   color: var(--color-ink);
   font-family: var(--font-mono);
   font-size: 14px;
@@ -261,7 +263,7 @@
 }
 
 .preview-pane {
-  background: var(--color-canvas);
+  background: var(--color-canvas-raised);
 }
 
 .workspace-welcome {
@@ -271,7 +273,7 @@
   justify-content: center;
   flex-direction: column;
   padding: 40px;
-  background: var(--color-canvas);
+  background: var(--color-canvas-raised);
   text-align: center;
 }
 
@@ -281,13 +283,14 @@
   height: 54px;
   place-items: center;
   border-radius: 8px;
-  background: var(--color-primary-soft);
-  color: var(--color-primary);
+  background: var(--color-action);
+  color: var(--color-on-action);
 }
 
 .workspace-welcome h1 {
   margin: 18px 0 7px;
-  font-size: 24px;
+  font-size: 25px;
+  font-weight: 620;
 }
 
 .workspace-welcome p {
@@ -319,8 +322,8 @@
   border: 1px solid var(--color-border);
   border-radius: 7px;
   padding: 3px;
-  background: color-mix(in srgb, var(--color-canvas) 94%, transparent);
-  box-shadow: var(--shadow-panel);
+  background: color-mix(in srgb, var(--color-canvas-raised) 94%, transparent);
+  box-shadow: var(--shadow-soft);
 }
 
 .workspace-float-controls__group .icon-button {
@@ -357,7 +360,7 @@
   gap: 5px;
   border: 2px dashed var(--color-primary);
   border-radius: 8px;
-  background: color-mix(in srgb, var(--color-canvas) 92%, var(--color-primary));
+  background: color-mix(in srgb, var(--color-canvas-raised) 92%, var(--color-primary));
   color: var(--color-primary);
   pointer-events: none;
   text-align: center;
@@ -384,9 +387,9 @@
   border: 1px solid color-mix(in srgb, var(--color-ink) 12%, transparent);
   border-radius: 7px;
   padding: 10px 15px;
-  background: var(--color-ink);
+  background: var(--color-action);
   box-shadow: var(--shadow-panel);
-  color: var(--color-canvas);
+  color: var(--color-on-action);
   font-size: 13px;
   font-weight: 600;
   line-height: 1.45;
@@ -437,7 +440,7 @@
 }
 
 .export-control__primary.ui-button {
-  border-radius: 999px 0 0 999px;
+  border-radius: 7px 0 0 7px;
   padding-right: 9px;
 }
 
@@ -452,9 +455,9 @@
   place-items: center;
   border: 1px solid var(--color-border-strong);
   border-left: 0;
-  border-radius: 0 999px 999px 0;
+  border-radius: 0 7px 7px 0;
   padding: 0;
-  background: var(--color-canvas);
+  background: var(--color-canvas-raised);
   color: var(--color-muted);
   cursor: pointer;
   list-style: none;
@@ -481,7 +484,7 @@
   overflow: hidden;
   border: 1px solid var(--color-border);
   border-radius: 8px;
-  background: var(--color-canvas);
+  background: var(--color-canvas-raised);
   box-shadow: var(--shadow-panel);
 }
 
@@ -506,7 +509,7 @@
 
 .export-menu__panel button[aria-current='true'] {
   box-shadow: inset 3px 0 0 var(--color-primary);
-  background: var(--color-primary-soft);
+  background: var(--color-canvas-soft);
 }
 
 .export-menu__panel small {
@@ -628,7 +631,8 @@
     inset: 0;
     display: block;
     border: 0;
-    background: rgba(13, 37, 61, 0.24);
+    background: rgba(25, 24, 21, 0.3);
+    backdrop-filter: blur(2px);
   }
 
   .markdown-workspace--rail-closed .document-rail {

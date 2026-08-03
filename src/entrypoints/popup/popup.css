@@ -1,14 +1,14 @@
 html,
 body,
 #root {
-  width: 370px;
+  width: 380px;
   min-height: 520px;
 }
 
 .popup-shell {
   min-height: 520px;
-  padding: 14px;
-  background: var(--color-canvas);
+  padding: 16px;
+  background: var(--color-canvas-soft);
 }
 
 .popup-header,
@@ -21,12 +21,12 @@ body,
 
 .popup-header {
   justify-content: space-between;
-  padding: 2px 2px 14px;
+  padding: 0 2px 16px;
 }
 
 .popup-brand {
   gap: 10px;
-  font-size: 16px;
+  font-size: 15px;
 }
 
 .popup-brand .brand-mark {
@@ -36,40 +36,45 @@ body,
   flex-basis: 34px;
   place-items: center;
   border-radius: 8px;
-  background: var(--color-ink);
-  color: var(--color-canvas);
+  background: var(--color-action);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--color-on-action) 11%, transparent);
+  color: var(--color-on-action);
   font-size: 16px;
 }
 
 .popup-actions {
-  border-block: 1px solid var(--color-border);
+  display: grid;
+  gap: 8px;
 }
 
 .popup-action {
   display: grid;
   width: 100%;
-  min-height: 64px;
+  min-height: 62px;
   align-items: center;
   grid-template-columns: 34px minmax(0, 1fr) 18px;
   gap: 10px;
-  border: 0;
-  border-bottom: 1px solid var(--color-border);
-  padding: 8px 6px;
-  background: transparent;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  padding: 9px 11px;
+  background: var(--color-canvas-raised);
   color: var(--color-ink);
   text-align: left;
 }
 
-.popup-action:last-child {
-  border-bottom: 0;
-}
-
 .popup-action:hover,
 .popup-recent:hover {
-  background: var(--color-canvas-soft);
+  border-color: var(--color-border-strong);
+  background: var(--color-canvas-raised);
+  box-shadow: var(--shadow-soft);
 }
 
 .popup-action > svg:first-child {
+  width: 32px;
+  height: 32px;
+  border-radius: 7px;
+  padding: 7px;
+  background: var(--color-primary-soft);
   color: var(--color-primary);
 }
 
@@ -89,8 +94,23 @@ body,
   height: 32px;
   padding: 6px;
   border-radius: 7px;
-  background: var(--color-primary);
-  color: #fff;
+  background: color-mix(in srgb, var(--color-on-action) 12%, transparent);
+  color: var(--color-on-action);
+}
+
+.popup-action--primary {
+  border-color: var(--color-action);
+  background: var(--color-action);
+  color: var(--color-on-action);
+}
+
+.popup-action--primary:hover {
+  border-color: var(--color-action-hover);
+  background: var(--color-action-hover);
+}
+
+.popup-action--primary small {
+  color: color-mix(in srgb, var(--color-on-action) 68%, transparent);
 }
 
 .popup-action span,
@@ -109,12 +129,12 @@ body,
 }
 
 .popup-recents {
-  padding-top: 16px;
+  padding-top: 20px;
 }
 
 .popup-section-heading {
   justify-content: space-between;
-  margin-bottom: 8px;
+  margin-bottom: 9px;
 }
 
 .popup-section-heading > strong {
@@ -128,9 +148,9 @@ body,
   align-items: center;
   grid-template-columns: 26px minmax(0, 1fr) 16px;
   gap: 8px;
-  border: 0;
-  border-radius: 6px;
-  padding: 6px;
+  border: 1px solid transparent;
+  border-radius: 7px;
+  padding: 7px 8px;
   background: transparent;
   color: var(--color-ink);
   text-align: left;
@@ -151,10 +171,17 @@ body,
   width: 100%;
   justify-content: center;
   gap: 7px;
-  margin-top: 14px;
-  border: 0;
+  margin-top: 16px;
+  border: 1px solid transparent;
+  border-radius: 7px;
   padding: 10px;
   background: transparent;
-  color: var(--color-primary);
-  font-weight: 600;
+  color: var(--color-ink-secondary);
+  font-weight: 620;
+}
+
+.popup-open-all:hover {
+  border-color: var(--color-border);
+  background: var(--color-canvas-raised);
+  color: var(--color-ink);
 }

@@ -5,8 +5,8 @@
   display: grid;
   place-items: center;
   padding: 20px;
-  background: rgba(13, 37, 61, 0.38);
-  backdrop-filter: blur(3px);
+  background: rgba(25, 24, 21, 0.38);
+  backdrop-filter: blur(4px);
 }
 
 .open-document-dialog {
@@ -16,7 +16,7 @@
   border: 1px solid var(--color-border);
   border-radius: 8px;
   padding: 24px;
-  background: var(--color-canvas);
+  background: var(--color-canvas-raised);
   box-shadow: var(--shadow-panel);
 }
 
@@ -30,6 +30,7 @@
 .open-document-dialog h2 {
   margin: 2px 0 0;
   font-size: 22px;
+  font-weight: 620;
 }
 
 .open-source-actions {
@@ -48,14 +49,15 @@
   border: 1px solid var(--color-border-strong);
   border-radius: 7px;
   padding: 14px;
-  background: var(--color-canvas-soft);
+  background: var(--color-canvas-raised);
   color: var(--color-primary);
   text-align: left;
 }
 
 .open-source-actions button:hover:not(:disabled) {
-  border-color: var(--color-primary);
-  background: var(--color-primary-soft);
+  border-color: var(--color-border-strong);
+  background: var(--color-canvas-soft);
+  box-shadow: var(--shadow-soft);
 }
 
 .open-source-actions span {
@@ -83,9 +85,14 @@
   align-items: center;
   grid-template-columns: 24px minmax(0, 1fr);
   border: 1px solid var(--color-border-strong);
-  border-radius: 6px;
+  border-radius: 7px;
   padding-left: 9px;
   color: var(--color-muted);
+}
+
+.url-input-row:focus-within {
+  border-color: var(--color-primary);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--color-primary) 11%, transparent);
 }
 
 .url-input-row input {

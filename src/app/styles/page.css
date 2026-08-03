@@ -1,8 +1,8 @@
 .page-frame {
-  width: min(1180px, 100%);
+  width: min(1200px, 100%);
   min-height: 100%;
   margin: 0 auto;
-  padding: 40px clamp(20px, 4vw, 56px) 64px;
+  padding: 46px clamp(24px, 4vw, 58px) 72px;
 }
 
 .page-intro {
@@ -10,13 +10,13 @@
   align-items: flex-end;
   justify-content: space-between;
   gap: 24px;
-  margin-bottom: 32px;
+  margin-bottom: 34px;
 }
 
 .page-intro h1 {
-  margin: 3px 0 7px;
-  font-size: 30px;
-  font-weight: 650;
+  margin: 6px 0 8px;
+  font-size: 32px;
+  font-weight: 620;
   letter-spacing: 0;
   line-height: 1.2;
 }
@@ -24,13 +24,24 @@
 .page-intro p {
   margin: 0;
   color: var(--color-muted);
+  font-size: 14px;
 }
 
 .page-kicker {
-  color: var(--color-primary) !important;
-  font-size: 12px;
-  font-weight: 700;
-  text-transform: uppercase;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--color-ink-secondary) !important;
+  font-size: 11px !important;
+  font-weight: 650;
+}
+
+.page-kicker::before {
+  width: 18px;
+  height: 2px;
+  border-radius: 999px;
+  background: var(--color-primary);
+  content: '';
 }
 
 .section-heading {
@@ -38,12 +49,13 @@
   align-items: end;
   justify-content: space-between;
   gap: 16px;
-  margin-bottom: 14px;
+  margin-bottom: 16px;
 }
 
 .section-heading h2 {
-  margin: 0 0 3px;
-  font-size: 18px;
+  margin: 0 0 4px;
+  font-size: 17px;
+  font-weight: 650;
 }
 
 .section-heading p {
@@ -54,10 +66,13 @@
 
 .empty-state {
   display: flex;
-  min-height: 120px;
+  min-height: 132px;
   align-items: center;
   gap: 14px;
-  border-block: 1px solid var(--color-border);
+  border: 1px dashed var(--color-border-strong);
+  border-radius: var(--radius-md);
+  padding: 20px;
+  background: color-mix(in srgb, var(--color-canvas-raised) 64%, transparent);
   color: var(--color-muted);
 }
 
@@ -71,7 +86,7 @@
 
 @media (max-width: 760px) {
   .page-frame {
-    padding-top: 28px;
+    padding: 30px 20px 56px;
   }
 
   .page-intro {

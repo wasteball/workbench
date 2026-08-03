@@ -17,10 +17,11 @@ body {
   background: var(--color-canvas-soft);
   color: var(--color-ink);
   font-family: var(--font-ui);
-  font-size: 15px;
+  font-size: 14px;
   letter-spacing: 0;
-  line-height: 1.5;
+  line-height: 1.55;
   text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
 }
 
 button,
@@ -41,7 +42,7 @@ textarea {
 }
 
 :focus-visible {
-  outline: 3px solid color-mix(in srgb, var(--color-primary) 28%, transparent);
+  outline: 2px solid color-mix(in srgb, var(--color-primary) 42%, transparent);
   outline-offset: 2px;
 }
 
@@ -52,6 +53,22 @@ button {
 button:disabled {
   cursor: not-allowed;
   opacity: 0.55;
+}
+
+input::placeholder,
+textarea::placeholder {
+  color: color-mix(in srgb, var(--color-muted) 78%, transparent);
+}
+
+input,
+select,
+textarea {
+  caret-color: var(--color-primary);
+}
+
+* {
+  scrollbar-color: var(--color-border-strong) transparent;
+  scrollbar-width: thin;
 }
 
 ::selection {

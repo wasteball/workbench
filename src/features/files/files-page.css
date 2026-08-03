@@ -30,17 +30,18 @@
 }
 
 .segmented-control button[aria-pressed='true'] {
-  background: var(--color-canvas);
-  box-shadow: 0 1px 3px color-mix(in srgb, var(--color-ink) 12%, transparent);
+  background: var(--color-canvas-raised);
+  box-shadow: 0 1px 3px color-mix(in srgb, var(--color-ink) 10%, transparent), inset 0 -2px var(--color-primary);
   color: var(--color-ink);
 }
 
 .document-share-panel {
   margin-bottom: 24px;
-  border: 1px solid color-mix(in srgb, var(--color-primary) 26%, var(--color-border));
+  border: 1px solid var(--color-border);
   border-radius: 8px;
   padding: 20px;
-  background: var(--color-canvas);
+  background: var(--color-canvas-raised);
+  box-shadow: var(--shadow-soft);
 }
 
 .document-share-panel__heading,
@@ -54,7 +55,8 @@
 
 .document-share-panel h2 {
   margin: 2px 0 4px;
-  font-size: 20px;
+  font-size: 19px;
+  font-weight: 650;
 }
 
 .document-share-panel p {
@@ -104,21 +106,21 @@
 
 .upload-zone {
   display: grid;
-  min-height: 126px;
+  min-height: 132px;
   align-items: center;
   grid-template-columns: 54px minmax(0, 1fr) auto;
   gap: 16px;
   border: 1px dashed var(--color-border-strong);
   border-radius: 8px;
-  padding: 22px;
-  background: var(--color-canvas);
+  padding: 24px;
+  background: var(--color-canvas-raised);
   cursor: pointer;
 }
 
 .upload-zone:hover,
 .upload-zone--dragging {
   border-color: var(--color-primary);
-  background: var(--color-primary-soft);
+  background: color-mix(in srgb, var(--color-primary-soft) 52%, var(--color-canvas-raised));
 }
 
 .upload-zone__icon {
@@ -126,6 +128,7 @@
   width: 52px;
   height: 52px;
   place-items: center;
+  border: 1px solid color-mix(in srgb, var(--color-primary) 14%, var(--color-border));
   border-radius: 8px;
   background: var(--color-primary-soft);
   color: var(--color-primary);
@@ -138,7 +141,8 @@
 }
 
 .upload-zone > span:nth-child(2) strong {
-  font-size: 16px;
+  font-size: 15px;
+  font-weight: 650;
 }
 
 .upload-zone > span:nth-child(2) small {
@@ -171,11 +175,11 @@
 
 .upload-category-bar select {
   min-width: 150px;
-  min-height: 34px;
+  min-height: 36px;
   border: 1px solid var(--color-border-strong);
   border-radius: 6px;
   padding: 4px 30px 4px 9px;
-  background: var(--color-canvas);
+  background: var(--color-canvas-raised);
   color: var(--color-ink);
 }
 
@@ -217,7 +221,8 @@
   height: 30px;
   place-items: center;
   border-radius: 6px;
-  background: var(--color-canvas);
+  border: 1px solid var(--color-border);
+  background: var(--color-canvas-raised);
   color: var(--color-muted);
 }
 
@@ -278,7 +283,7 @@
 
 .link-download-panel {
   border-block: 1px solid var(--color-border);
-  padding: 20px 0;
+  padding: 26px 0;
 }
 
 .link-download-panel .section-heading {
@@ -295,29 +300,35 @@
 .link-download-url {
   display: grid;
   min-width: 0;
-  min-height: 40px;
+  min-height: 42px;
   align-items: center;
   grid-template-columns: 27px minmax(0, 1fr);
   border: 1px solid var(--color-border-strong);
-  border-radius: 6px;
+  border-radius: 7px;
   padding-left: 9px;
-  background: var(--color-canvas);
+  background: var(--color-canvas-raised);
   color: var(--color-muted);
 }
 
 .link-download-url input,
 .link-download-name {
   min-width: 0;
-  min-height: 38px;
+  min-height: 40px;
   border: 0;
   background: transparent;
 }
 
 .link-download-name {
   border: 1px solid var(--color-border-strong);
-  border-radius: 6px;
+  border-radius: 7px;
   padding: 7px 10px;
-  background: var(--color-canvas);
+  background: var(--color-canvas-raised);
+}
+
+.link-download-url:focus-within,
+.link-download-name:focus {
+  border-color: var(--color-primary);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--color-primary) 11%, transparent);
 }
 
 .file-library__heading {
@@ -341,9 +352,9 @@
   z-index: 8;
   top: 0;
   border-block: 1px solid var(--color-border);
-  padding: 10px 0;
-  background: color-mix(in srgb, var(--color-canvas-soft) 96%, transparent);
-  backdrop-filter: blur(12px);
+  padding: 11px 0;
+  background: color-mix(in srgb, var(--color-canvas-soft) 93%, transparent);
+  backdrop-filter: blur(16px) saturate(120%);
 }
 
 .file-library__toolbar {
@@ -371,7 +382,7 @@
   overflow: hidden;
   border: 1px solid var(--color-border);
   border-radius: 6px;
-  background: var(--color-canvas);
+  background: var(--color-canvas-raised);
 }
 
 .library-toolbar-meta nav .icon-button {
@@ -388,13 +399,13 @@
 .library-search {
   display: grid;
   width: min(420px, 100%);
-  min-height: 38px;
+  min-height: 40px;
   align-items: center;
   grid-template-columns: 24px minmax(0, 1fr);
   border: 1px solid var(--color-border-strong);
-  border-radius: 6px;
+  border-radius: 7px;
   padding-left: 9px;
-  background: var(--color-canvas);
+  background: var(--color-canvas-raised);
   color: var(--color-muted);
 }
 
@@ -402,6 +413,12 @@
   min-width: 0;
   border: 0;
   background: transparent;
+}
+
+.library-search:focus-within {
+  border-color: var(--color-primary);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--color-primary) 11%, transparent);
+  color: var(--color-primary);
 }
 
 .filter-strip {
@@ -450,12 +467,13 @@
 
 .filter-strip > button:not(.icon-button):hover,
 .filter-strip > button[aria-pressed='true']:not(.icon-button) {
-  background: var(--color-primary-soft);
-  color: var(--color-primary);
+  background: var(--color-canvas-raised);
+  color: var(--color-ink);
 }
 
 .filter-strip > button[aria-pressed='true']:not(.icon-button) {
   box-shadow: inset 0 -2px var(--color-primary);
+  font-weight: 620;
 }
 
 .filter-strip button small {
@@ -525,7 +543,7 @@
   border: 1px solid var(--color-border-strong);
   border-radius: 5px;
   padding-left: 7px;
-  background: var(--color-canvas);
+  background: var(--color-canvas-raised);
   color: var(--color-muted);
 }
 
@@ -590,7 +608,7 @@
 
 .share-record:hover,
 .share-record--selected {
-  background: color-mix(in srgb, var(--color-primary-soft) 46%, transparent);
+  background: color-mix(in srgb, var(--color-primary-soft) 34%, transparent);
 }
 
 .share-record__icon {
@@ -599,7 +617,8 @@
   height: 34px;
   place-items: center;
   border-radius: 6px;
-  background: var(--color-canvas);
+  border: 1px solid var(--color-border);
+  background: var(--color-canvas-raised);
   color: var(--kind-color, var(--color-primary));
 }
 
@@ -650,7 +669,7 @@
   border: 1px solid var(--color-border);
   border-radius: 4px;
   padding: 3px 24px 3px 7px;
-  background: var(--color-canvas);
+  background: var(--color-canvas-raised);
   color: var(--color-ink-secondary);
   font-size: 11px;
   text-overflow: ellipsis;
@@ -688,8 +707,8 @@
 }
 
 .record-text-action:hover {
-  background: var(--color-primary-soft);
-  color: var(--color-primary);
+  background: var(--color-canvas-raised);
+  color: var(--color-ink);
 }
 
 .share-record__actions .icon-button:last-child {
@@ -717,8 +736,8 @@
   display: grid;
   place-items: center;
   padding: 20px;
-  background: rgba(13, 37, 61, 0.38);
-  backdrop-filter: blur(3px);
+  background: rgba(25, 24, 21, 0.38);
+  backdrop-filter: blur(4px);
 }
 
 .library-dialog {
@@ -728,7 +747,7 @@
   border: 1px solid var(--color-border);
   border-radius: 8px;
   padding: 22px;
-  background: var(--color-canvas);
+  background: var(--color-canvas-raised);
   box-shadow: var(--shadow-panel);
 }
 
@@ -765,9 +784,9 @@
   min-width: 0;
   min-height: 38px;
   border: 1px solid var(--color-border-strong);
-  border-radius: 6px;
+  border-radius: 7px;
   padding: 7px 10px;
-  background: var(--color-canvas);
+  background: var(--color-canvas-raised);
 }
 
 .category-manager-list {
@@ -848,9 +867,9 @@
   border: 1px solid color-mix(in srgb, var(--color-ink) 12%, transparent);
   border-radius: 7px;
   padding: 10px 15px;
-  background: var(--color-ink);
+  background: var(--color-action);
   box-shadow: var(--shadow-panel);
-  color: var(--color-canvas);
+  color: var(--color-on-action);
   font-size: 13px;
   font-weight: 600;
   line-height: 1.45;

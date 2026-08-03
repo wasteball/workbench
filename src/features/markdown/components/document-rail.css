@@ -18,8 +18,8 @@
   min-height: 126px;
   max-height: 44%;
   flex: 0 0 38%;
-  border-bottom: 2px solid var(--color-border);
-  background: var(--color-canvas-raised);
+  border-bottom: 1px solid var(--color-border-strong);
+  background: var(--color-canvas);
 }
 
 .document-rail__section--outline {
@@ -38,7 +38,7 @@
   align-items: center;
   grid-template-columns: minmax(0, 1fr) 34px;
   padding-right: 5px;
-  box-shadow: inset 2px 0 0 var(--color-primary);
+  box-shadow: inset 2px 0 0 color-mix(in srgb, var(--color-primary) 78%, transparent);
 }
 
 .document-rail__section-header > .icon-button {
@@ -78,7 +78,8 @@
 }
 
 .document-rail__section-heading strong {
-  font-size: 11px;
+  font-size: 10px;
+  font-weight: 650;
   letter-spacing: 0;
 }
 
@@ -110,7 +111,7 @@
   border: 1px solid var(--color-border);
   border-radius: 6px;
   padding: 0 5px 0 8px;
-  background: var(--color-canvas);
+  background: var(--color-canvas-raised);
   color: var(--color-muted);
 }
 
@@ -162,12 +163,13 @@
 }
 
 .document-tree__row:hover {
-  background: var(--color-primary-soft);
+  background: var(--color-canvas-raised);
 }
 
 .document-tree__row--active {
-  background: var(--color-primary);
-  color: #fff;
+  background: var(--color-canvas-raised);
+  box-shadow: inset 3px 0 0 var(--color-primary);
+  color: var(--color-ink);
 }
 
 .document-tree__row > button:first-child {
@@ -200,7 +202,7 @@
 }
 
 .document-tree__row--active > button i {
-  background: #fff;
+  background: var(--color-warning);
 }
 
 .document-tree__row > .icon-button {
@@ -256,15 +258,16 @@
   margin: 7px 5px 2px;
   border: 1px solid var(--color-border);
   border-radius: 5px;
-  background: var(--color-canvas);
+  background: var(--color-canvas-raised);
   color: var(--color-primary);
   font-size: 11px;
 }
 
 .document-tree__more:hover,
 .document-tree__more:focus-visible {
-  border-color: var(--color-primary);
-  background: var(--color-primary-soft);
+  border-color: var(--color-border-strong);
+  background: var(--color-canvas-raised);
+  color: var(--color-ink);
 }
 
 .document-outline {
@@ -290,8 +293,8 @@
 .document-outline button:hover,
 .document-outline button[aria-current='location'] {
   border-left-color: var(--color-primary);
-  background: var(--color-primary-soft);
-  color: var(--color-primary);
+  background: var(--color-canvas-raised);
+  color: var(--color-ink);
 }
 
 .document-outline__level-1 { font-weight: 700; }

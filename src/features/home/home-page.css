@@ -1,36 +1,32 @@
 .quick-actions {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
-  border-block: 1px solid var(--color-border);
-  background: var(--color-canvas);
+  gap: 12px;
 }
 
 .quick-action {
   display: grid;
   min-width: 0;
-  min-height: 112px;
+  min-height: 118px;
   align-items: center;
   grid-template-columns: 42px minmax(0, 1fr) auto;
   gap: 14px;
-  border: 0;
-  border-right: 1px solid var(--color-border);
-  padding: 18px;
-  background: transparent;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  padding: 19px;
+  background: var(--color-canvas-raised);
   color: var(--color-ink);
   text-align: left;
 }
 
-.quick-action:last-child {
-  border-right: 0;
-}
-
 .quick-action:hover {
-  background: var(--color-canvas-soft);
+  border-color: var(--color-border-strong);
+  box-shadow: var(--shadow-soft);
 }
 
 .quick-action--primary .quick-action__icon {
-  background: var(--color-primary);
-  color: #fff;
+  background: var(--color-action);
+  color: var(--color-on-action);
 }
 
 .quick-action__icon {
@@ -39,7 +35,7 @@
   height: 42px;
   place-items: center;
   border-radius: 8px;
-  background: var(--color-primary-soft);
+  background: var(--color-canvas-soft);
   color: var(--color-primary);
 }
 
@@ -50,7 +46,8 @@
 }
 
 .quick-action strong {
-  font-size: 15px;
+  font-size: 14px;
+  font-weight: 650;
 }
 
 .quick-action small {
@@ -58,8 +55,17 @@
   overflow-wrap: anywhere;
 }
 
+.quick-action > svg:last-child {
+  color: var(--color-muted);
+  transition: transform 140ms ease;
+}
+
+.quick-action:hover > svg:last-child {
+  transform: translateX(2px);
+}
+
 .home-section {
-  margin-top: 36px;
+  margin-top: 42px;
 }
 
 .recent-list {
@@ -75,14 +81,14 @@
   gap: 14px;
   border: 0;
   border-bottom: 1px solid var(--color-border);
-  padding: 10px 8px;
+  padding: 10px 10px 10px 6px;
   background: transparent;
   color: var(--color-ink);
   text-align: left;
 }
 
 .recent-row:hover {
-  background: color-mix(in srgb, var(--color-canvas) 65%, transparent);
+  background: color-mix(in srgb, var(--color-canvas-raised) 72%, transparent);
 }
 
 .recent-row__icon {
@@ -91,7 +97,8 @@
   height: 34px;
   place-items: center;
   border-radius: 6px;
-  background: var(--color-canvas);
+  border: 1px solid var(--color-border);
+  background: var(--color-canvas-raised);
   color: var(--color-primary);
 }
 
@@ -129,12 +136,6 @@
   .quick-action,
   .quick-action:last-child {
     min-height: 88px;
-    border-right: 0;
-    border-bottom: 1px solid var(--color-border);
-  }
-
-  .quick-action:last-child {
-    border-bottom: 0;
   }
 
   .recent-row {

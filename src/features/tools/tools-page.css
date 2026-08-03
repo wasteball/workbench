@@ -4,7 +4,7 @@
 
 .tool-form-section {
   border-block: 1px solid var(--color-border);
-  padding: 24px 0;
+  padding: 26px 0;
 }
 
 .tool-form {
@@ -29,20 +29,21 @@
 .tool-form label > span {
   color: var(--color-ink-secondary);
   font-size: 12px;
-  font-weight: 600;
+  font-weight: 620;
 }
 
 .tool-form input {
   width: 100%;
   min-height: 40px;
   border: 1px solid var(--color-border-strong);
-  border-radius: 6px;
+  border-radius: 7px;
   padding: 8px 11px;
-  background: var(--color-canvas);
+  background: var(--color-canvas-raised);
 }
 
 .tool-form input:focus {
   border-color: var(--color-primary);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--color-primary) 11%, transparent);
 }
 
 .form-error {
@@ -66,7 +67,7 @@
   grid-template-columns: 40px minmax(0, 1fr) auto;
   gap: 12px;
   border-bottom: 1px solid var(--color-border);
-  padding: 8px 4px;
+  padding: 9px 6px;
 }
 
 .custom-tool-row__icon {
@@ -75,7 +76,9 @@
   height: 38px;
   place-items: center;
   border-radius: 7px;
-  background: var(--color-primary-soft);
+  border: 1px solid var(--color-border);
+  background: var(--color-canvas-raised);
+  color: var(--color-primary);
 }
 
 .custom-tool-row > span:nth-child(2) {
