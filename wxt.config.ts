@@ -11,7 +11,7 @@ export default defineConfig({
     name: APP_META.name,
     short_name: APP_META.shortName,
     description: APP_META.description,
-    permissions: ['storage', 'downloads'],
+    permissions: ['storage'],
     optional_permissions: ['clipboardWrite'],
     optional_host_permissions: OPTIONAL_HOST_PERMISSIONS,
     icons: {

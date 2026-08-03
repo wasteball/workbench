@@ -55,6 +55,24 @@ function sessionClient(session: ConnectorSession): OSS {
   return value.oss;
 }
 
+function objectLink(
+  profile: AliyunProfile,
+  session: ConnectorSession,
+  key: string,
+  access: 'public' | 'signed',
+) {
+  if (access === 'public') return { url: publicObjectUrl(profile, key), access, expiresAt: null } as const;
+  const maxExpiry = session.credentialsExpireAt
+    ? Math.max(60, Math.floor((session.credentialsExpireAt - Date.now()) / 1000))
+    : profile.signedUrlExpiresInSeconds;
+  const expires = Math.min(profile.signedUrlExpiresInSeconds, maxExpiry);
+  return {
+    url: sessionClient(session).signatureUrl(key, { expires }),
+    access,
+    expiresAt: Date.now() + expires * 1000,
+  } as const;
+}
+
 async function requestSts(profile: AliyunProfile) {
   if (!await ensureWebsitePermission(profile.stsUrl)) throw new StorageConnectorError('未获得 STS 服务的网站权限。', 'permission-denied');
   let response: Response;
@@ -206,16 +224,24 @@ export const aliyunConnector: StorageConnector = {
         input.onProgress?.(1);
       }
       const access = input.access === 'public' ? 'public' : 'signed';
-      const maxExpiry = session.credentialsExpireAt ? Math.max(60, Math.floor((session.credentialsExpireAt - Date.now()) / 1000)) : aliyun.signedUrlExpiresInSeconds;
-      const expires = Math.min(aliyun.signedUrlExpiresInSeconds, maxExpiry);
-      const url = access === 'public' ? publicObjectUrl(aliyun, key) : oss.signatureUrl(key, { expires });
+      const link = objectLink(aliyun, session, key, access);
       return {
         objectKey: key,
-        url,
+        url: link.url,
         size: input.blob.size,
         access,
-        expiresAt: access === 'signed' ? Date.now() + expires * 1000 : null,
+        expiresAt: link.expiresAt,
       };
+    } catch (error) {
+      mapProviderError(error);
+    }
+  },
+
+  async link(profile, session, key, access) {
+    const aliyun = asAliyunProfile(profile);
+    if (!aliyun) throw new StorageConnectorError('阿里云连接配置已失效。', 'invalid-config');
+    try {
+      return objectLink(aliyun, session, key, access === 'public' ? 'public' : 'signed');
     } catch (error) {
       mapProviderError(error);
     }

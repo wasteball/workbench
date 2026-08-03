@@ -29,14 +29,22 @@ export interface ShareRecord {
   access: 'public' | 'signed' | 'authenticated' | 'unknown';
   expiresAt: number | null;
   category: string;
+  relativePath: string;
   storageProfileId: string;
   storageProvider: 'gateway' | 'aliyun-oss';
   createdAt: number;
 }
 
+export interface FileCategoryRecord {
+  name: string;
+  createdAt: number;
+  updatedAt: number;
+}
+
 class WorkbenchDatabase extends Dexie {
   documents!: EntityTable<DocumentRecord, 'id'>;
   shares!: EntityTable<ShareRecord, 'id'>;
+  fileCategories!: EntityTable<FileCategoryRecord, 'name'>;
 
   constructor() {
     super('workbench-v1');
@@ -76,6 +84,34 @@ class WorkbenchDatabase extends Dexie {
           record.objectKey = null;
           record.category = '未分类';
         });
+      });
+    this.version(4)
+      .stores({
+        documents: 'id, updatedAt, source, draftUpdatedAt, lastDestination',
+        shares: 'id, createdAt, storageProfileId, storageProvider, category, fileName',
+        fileCategories: 'name, createdAt',
+      })
+      .upgrade(async (transaction) => {
+        const categoryNames = new Set<string>();
+        await transaction.table('shares').toCollection().modify((record: Record<string, unknown>) => {
+          const fileName = typeof record.fileName === 'string' && record.fileName.trim()
+            ? record.fileName
+            : '未命名文件';
+          const category = typeof record.category === 'string' && record.category.trim()
+            ? record.category.trim()
+            : '未分类';
+          const pathParts = fileName.replaceAll('\\', '/').split('/').filter(Boolean);
+          record.relativePath = fileName;
+          if (typeof record.displayName !== 'string' || !record.displayName.trim() || /[\\/]/.test(record.displayName)) {
+            record.displayName = pathParts.at(-1) ?? fileName;
+          }
+          record.category = category;
+          if (category !== '未分类') categoryNames.add(category);
+        });
+        const now = Date.now();
+        await transaction.table('fileCategories').bulkPut(
+          [...categoryNames].map((name) => ({ name, createdAt: now, updatedAt: now })),
+        );
       });
   }
 }

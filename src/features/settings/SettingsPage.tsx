@@ -310,7 +310,7 @@ export function SettingsPage({ route, navigate }: PageProps) {
   const clearLocalData = async () => {
     const confirmed = window.confirm('这会删除当前浏览器中的草稿、分享记录、设置和已保存凭据。下载到电脑或已上传到云端的文件不会被删除。继续吗？');
     if (!confirmed) return;
-    await Promise.all([db.documents.clear(), db.shares.clear(), settingsService.reset()]);
+    await Promise.all([db.documents.clear(), db.shares.clear(), db.fileCategories.clear(), settingsService.reset()]);
     window.location.reload();
   };
 

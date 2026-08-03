@@ -2,6 +2,7 @@ import {
   type ConnectorSession,
   type RemoteFile,
   type StorageConnector,
+  type StorageLink,
   StorageConnectorError,
   type UploadInput,
   type UploadResult,
@@ -52,6 +53,13 @@ export const storageService = {
     const session = await ensureSession(profile);
     if (!session.capabilities.includes('upload')) throw new StorageConnectorError('当前凭据没有上传能力。', 'permission-denied');
     return (await connectorFor(profile)).upload(input, profile, session);
+  },
+
+  async link(profile: StorageProfile, objectKey: string, access: UploadResult['access']): Promise<StorageLink> {
+    const connector = await connectorFor(profile);
+    const session = await ensureSession(profile);
+    if (!connector.link) throw new StorageConnectorError('当前连接无法重新生成文件链接。', 'permission-denied');
+    return connector.link(profile, session, objectKey, access);
   },
 
   async list(profile: StorageProfile, prefix?: string): Promise<RemoteFile[]> {

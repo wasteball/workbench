@@ -36,7 +36,7 @@ export const BUILTIN_CAPABILITIES: BuiltinCapability[] = [
     id: 'files',
     name: '文件与分享',
     shortName: '文件',
-    description: '上传、分享记录与云端文件',
+    description: '上传、文件库与链接分享',
     icon: CloudUpload,
   },
   {
