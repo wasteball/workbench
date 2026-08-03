@@ -1,5 +1,7 @@
-import { ensureWebsitePermission } from '@/platform/permissions/website-permission';
+import { browser } from 'wxt/browser';
+
 import { downloadBlob } from '@/platform/files/download-blob';
+import { ensureWebsitePermission } from '@/platform/permissions/website-permission';
 
 const WRAPPED_URL_PARAMETERS = ['file_path', 'filepath', 'url', 'fileUrl', 'target', 'src'];
 
@@ -83,15 +85,24 @@ export interface DownloadRemoteFileOptions {
   url: string;
   preferredFileName?: string;
   signal?: AbortSignal;
+  fallbackToOpen?: boolean;
+}
+
+export interface DownloadRemoteFileResult {
+  fileName: string;
+  size: number;
+  delivery: 'downloaded' | 'opened';
 }
 
 export async function downloadRemoteFile({
   url: rawUrl,
   preferredFileName,
   signal,
-}: DownloadRemoteFileOptions): Promise<{ fileName: string; size: number }> {
+  fallbackToOpen = true,
+}: DownloadRemoteFileOptions): Promise<DownloadRemoteFileResult> {
   const url = resolveDownloadUrl(rawUrl);
   if (!await ensureWebsitePermission(url)) throw new Error('未获得该网站的下载权限。');
+  const fallbackFileName = safeDownloadFilename(preferredFileName?.trim() || filenameFromUrl(url));
 
   const controller = new AbortController();
   const timeout = window.setTimeout(() => controller.abort(), 60_000);
@@ -107,9 +118,17 @@ export async function downloadRemoteFile({
       throw new Error('对象存储返回了错误信息，没有下载该内容。链接可能已失效，请重新获取链接。');
     }
     downloadBlob(blob, fileName);
-    return { fileName, size: blob.size };
+    return { fileName, size: blob.size, delivery: 'downloaded' };
   } catch (error) {
     if (error instanceof DOMException && error.name === 'AbortError') throw new Error('下载超时，请检查网络后重试。', { cause: error });
+    if (fallbackToOpen && error instanceof TypeError) {
+      try {
+        await browser.tabs.create({ url });
+        return { fileName: fallbackFileName, size: 0, delivery: 'opened' };
+      } catch {
+        // Report the original network or CORS error when the fallback also fails.
+      }
+    }
     throw error;
   } finally {
     window.clearTimeout(timeout);

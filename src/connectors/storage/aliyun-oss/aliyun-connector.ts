@@ -131,32 +131,16 @@ async function createSession(profile: AliyunProfile): Promise<ConnectorSession> 
     secure: true,
   });
 
-  let verified = false;
-  let message = profile.credentialMode === 'sts' ? 'STS 临时凭证有效。' : '凭据已读取；上传权限会在首次上传时确认。';
-  if (capabilities.includes('list') || profile.credentialMode === 'access-key') {
-    try {
-      await oss.list({ prefix: profile.prefix || undefined, 'max-keys': 1 }, { timeout: 10_000 });
-      verified = true;
-      if (!capabilities.includes('list')) capabilities = [...capabilities, 'list'];
-      message = '连接成功，已验证读取权限；写入权限会在首次上传时确认。';
-    } catch (error) {
-      const code = (error as { code?: string }).code;
-      if (code !== 'AccessDenied' && code !== 'NoSuchBucket') {
-        message = '已建立连接，但无法验证文件列表权限；上传权限会在首次上传时确认。';
-      } else if (code === 'NoSuchBucket') {
-        throw new StorageConnectorError('找不到这个 Bucket，请检查地域和名称。', 'invalid-config');
-      }
-    }
-  }
-
   return {
     profileId: profile.id,
     provider: 'aliyun-oss',
     capabilities: [...new Set(capabilities)],
     defaultAccess: profile.defaultAccess,
     ...(credentialsExpireAt ? { credentialsExpireAt } : {}),
-    verified,
-    message,
+    verified: profile.credentialMode === 'sts',
+    message: profile.credentialMode === 'sts'
+      ? '临时凭据已读取；上传权限会在首次上传时确认。'
+      : 'AccessKey 已读取；上传权限会在首次上传时确认。',
     client: { oss } satisfies AliyunSessionClient,
   };
 }

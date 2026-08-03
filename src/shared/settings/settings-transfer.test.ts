@@ -1,7 +1,12 @@
 import { describe, expect, it } from 'vitest';
 
 import { DEFAULT_SETTINGS } from '@/shared/settings/defaults';
-import { createSettingsExport, parseSettingsImport } from '@/shared/settings/settings-transfer';
+import {
+  createSettingsExport,
+  createWorkbenchBackup,
+  parseSettingsImport,
+  parseWorkbenchImport,
+} from '@/shared/settings/settings-transfer';
 import type { AppSettings } from '@/shared/types';
 
 describe('settings transfer', () => {
@@ -69,5 +74,52 @@ describe('settings transfer', () => {
     const aliyun = imported.storageProfiles.find((profile) => profile.provider === 'aliyun-oss');
     expect(aliyun?.accessKeySecret).toBe('');
     expect(aliyun?.rememberAccessKey).toBe(false);
+  });
+
+  it('backs up preferences and file-library records without credentials', () => {
+    const settings: AppSettings = {
+      ...structuredClone(DEFAULT_SETTINGS),
+      readingWidth: 1040,
+      storageProfiles: [{
+        id: 'gateway',
+        provider: 'gateway',
+        name: 'API 方式',
+        apiUrl: 'https://example.com/upload',
+        bucket: 'documents',
+        userCode: 'private-user',
+        cdn: false,
+        publicRead: false,
+        headers: [],
+      }],
+      activeStorageProfileId: 'gateway',
+    };
+    const backup = createWorkbenchBackup(settings, [{
+      id: 'share-1',
+      fileName: '手册.md',
+      displayName: '手册.md',
+      size: 120,
+      contentType: 'text/markdown',
+      url: 'https://example.com/files/manual.md',
+      objectKey: null,
+      access: 'public',
+      expiresAt: null,
+      category: '文档',
+      relativePath: '项目/手册.md',
+      storageProfileId: 'gateway',
+      storageProvider: 'gateway',
+      createdAt: 123,
+    }], [{ name: '文档', createdAt: 100, updatedAt: 100 }]);
+
+    expect(JSON.stringify(backup)).not.toContain('private-user');
+    const restored = parseWorkbenchImport(backup);
+    expect(restored.settings.readingWidth).toBe(1040);
+    expect(restored.fileLibrary?.shares[0]?.displayName).toBe('手册.md');
+    expect(restored.fileLibrary?.categories[0]?.name).toBe('文档');
+  });
+
+  it('keeps old settings-only files importable', () => {
+    const restored = parseWorkbenchImport(createSettingsExport(DEFAULT_SETTINGS));
+    expect(restored.settings.theme).toBe(DEFAULT_SETTINGS.theme);
+    expect(restored.fileLibrary).toBeNull();
   });
 });

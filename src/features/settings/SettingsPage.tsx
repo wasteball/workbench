@@ -43,10 +43,10 @@ import { db } from '@/shared/persistence/database';
 import { DEFAULT_SETTINGS } from '@/shared/settings/defaults';
 import { settingsService } from '@/shared/settings/settings-service';
 import {
-  createSettingsExport,
-  parseSettingsImport,
+  createWorkbenchBackup,
+  parseWorkbenchImport,
 } from '@/shared/settings/settings-transfer';
-import type { StorageProfile, ThemePreference } from '@/shared/types';
+import type { StorageProfile, StorageProviderId, ThemePreference } from '@/shared/types';
 import { Button } from '@/shared/ui/Button';
 import { IconButton } from '@/shared/ui/IconButton';
 import { StatusPill } from '@/shared/ui/StatusPill';
@@ -71,11 +71,11 @@ function isSection(value: string | null): value is SettingsSection {
   return SETTINGS_SECTIONS.some((section) => section.id === value);
 }
 
-function createGatewayProfile(index: number): StorageProfile {
+function createGatewayProfile(): StorageProfile {
   return {
     id: nanoid(),
     provider: 'gateway',
-    name: index > 1 ? `单位提供的连接 ${index}` : '单位提供的连接',
+    name: 'API 方式',
     apiUrl: '',
     bucket: '',
     userCode: '',
@@ -85,11 +85,11 @@ function createGatewayProfile(index: number): StorageProfile {
   };
 }
 
-function createAliyunProfile(index: number): StorageProfile {
+function createAliyunProfile(): StorageProfile {
   return {
     id: nanoid(),
     provider: 'aliyun-oss',
-    name: index > 1 ? `我的阿里云存储 ${index}` : '我的阿里云存储',
+    name: '阿里云 OSS',
     credentialMode: 'access-key',
     region: '',
     endpoint: '',
@@ -103,6 +103,23 @@ function createAliyunProfile(index: number): StorageProfile {
     defaultAccess: 'private',
     signedUrlExpiresInSeconds: 3600,
   };
+}
+
+function createStorageProfile(provider: StorageProviderId): StorageProfile {
+  return provider === 'gateway' ? createGatewayProfile() : createAliyunProfile();
+}
+
+function profileName(provider: StorageProviderId): string {
+  return provider === 'gateway' ? 'API 方式' : '阿里云 OSS';
+}
+
+function savedProfileForProvider(
+  profiles: StorageProfile[],
+  provider: StorageProviderId,
+  activeProfileId: string | null,
+): StorageProfile | undefined {
+  return profiles.find((profile) => profile.id === activeProfileId && profile.provider === provider)
+    ?? profiles.find((profile) => profile.provider === provider);
 }
 
 interface MenuSettingsItem {
@@ -170,8 +187,14 @@ export function SettingsPage({ route, navigate }: PageProps) {
   const { settings, update } = useSettings();
   const { resetDestination } = useDestination();
   const initialSection = route.params.get('section');
+  const activeProfile = settings.storageProfiles.find((profile) => profile.id === settings.activeStorageProfileId);
+  const initialStorageProvider = activeProfile?.provider ?? 'gateway';
   const [section, setSection] = useState<SettingsSection>(isSection(initialSection) ? initialSection : 'general');
-  const [profileDraft, setProfileDraft] = useState<StorageProfile | null>(null);
+  const [storageProvider, setStorageProvider] = useState<StorageProviderId>(initialStorageProvider);
+  const [profileDraft, setProfileDraft] = useState<StorageProfile>(() => structuredClone(
+    savedProfileForProvider(settings.storageProfiles, initialStorageProvider, settings.activeStorageProfileId)
+      ?? createStorageProfile(initialStorageProvider),
+  ));
   const [showSecret, setShowSecret] = useState(false);
   const [storageMessage, setStorageMessage] = useState('');
   const [testingStorage, setTestingStorage] = useState(false);
@@ -184,12 +207,10 @@ export function SettingsPage({ route, navigate }: PageProps) {
     if (isSection(requested)) setSection(requested);
   }, [route.params]);
 
-  const activeProfile = settings.storageProfiles.find((profile) => profile.id === settings.activeStorageProfileId)
-    ?? settings.storageProfiles[0];
-
   useEffect(() => {
-    setProfileDraft(activeProfile ? structuredClone(activeProfile) : null);
-  }, [activeProfile]);
+    const saved = savedProfileForProvider(settings.storageProfiles, storageProvider, settings.activeStorageProfileId);
+    setProfileDraft(structuredClone(saved ?? createStorageProfile(storageProvider)));
+  }, [settings.activeStorageProfileId, settings.storageProfiles, storageProvider]);
 
   const menuItems = useMemo<MenuSettingsItem[]>(() => {
     const items: MenuSettingsItem[] = [
@@ -235,16 +256,19 @@ export function SettingsPage({ route, navigate }: PageProps) {
   };
 
   const setDraft = (patch: Partial<StorageProfile>) => {
-    setProfileDraft((current) => current ? ({ ...current, ...patch } as StorageProfile) : current);
+    setProfileDraft((current) => ({ ...current, ...patch } as StorageProfile));
     setStorageMessage('');
   };
 
+  const selectStorageProvider = async (provider: StorageProviderId) => {
+    setStorageProvider(provider);
+    const saved = savedProfileForProvider(settings.storageProfiles, provider, settings.activeStorageProfileId);
+    setProfileDraft(structuredClone(saved ?? createStorageProfile(provider)));
+    setStorageMessage(saved ? `${profileName(provider)}已选中。` : `请填写${profileName(provider)}的连接信息。`);
+    await update({ activeStorageProfileId: saved?.id ?? null });
+  };
+
   const saveProfile = async () => {
-    if (!profileDraft) return;
-    if (!profileDraft.name.trim()) {
-      setStorageMessage('请填写连接名称。');
-      return;
-    }
     if (profileDraft.provider === 'gateway' && profileDraft.apiUrl) {
       try {
         const url = new URL(profileDraft.apiUrl);
@@ -254,14 +278,18 @@ export function SettingsPage({ route, navigate }: PageProps) {
         return;
       }
     }
-    const next = settings.storageProfiles.map((profile) => profile.id === profileDraft.id ? profileDraft : profile);
-    storageService.forget(profileDraft.id);
-    await update({ storageProfiles: next, activeStorageProfileId: profileDraft.id });
-    setStorageMessage(isStorageProfileConfigured(profileDraft) ? '连接信息已保存，可以测试实际权限。' : '连接信息已保存；补齐必填项后才会开启上传。');
+    const savedProfile = { ...profileDraft, name: profileName(profileDraft.provider) } as StorageProfile;
+    const next = [
+      ...settings.storageProfiles.filter((profile) => profile.provider !== savedProfile.provider),
+      savedProfile,
+    ];
+    storageService.forget(savedProfile.id);
+    setProfileDraft(savedProfile);
+    await update({ storageProfiles: next, activeStorageProfileId: savedProfile.id });
+    setStorageMessage(isStorageProfileConfigured(savedProfile) ? '连接信息已保存，可以开始上传。' : '连接信息已保存；补齐必填项后才会开启上传。');
   };
 
   const testProfile = async () => {
-    if (!profileDraft) return;
     setTestingStorage(true);
     setStorageMessage('正在检查连接…');
     try {
@@ -274,36 +302,45 @@ export function SettingsPage({ route, navigate }: PageProps) {
     }
   };
 
-  const addProfile = async (provider: 'gateway' | 'aliyun-oss') => {
-    const sameProviderCount = settings.storageProfiles.filter((profile) => profile.provider === provider).length + 1;
-    const profile = provider === 'gateway' ? createGatewayProfile(sameProviderCount) : createAliyunProfile(sameProviderCount);
-    await update({ storageProfiles: [...settings.storageProfiles, profile], activeStorageProfileId: profile.id });
-    setProfileDraft(profile);
-    setStorageMessage('新连接已创建，请填写连接信息。');
-  };
-
-  const deleteProfile = async () => {
-    if (!profileDraft || !window.confirm(`删除“${profileDraft.name}”？已保存的凭据也会一并移除。`)) return;
+  const clearProfile = async () => {
+    if (!window.confirm(`清空${profileName(profileDraft.provider)}的配置？已保存的凭据也会一并移除。`)) return;
     storageService.forget(profileDraft.id);
-    const remaining = settings.storageProfiles.filter((profile) => profile.id !== profileDraft.id);
-    await update({ storageProfiles: remaining, activeStorageProfileId: remaining[0]?.id ?? null });
-    setProfileDraft(remaining[0] ?? null);
-    setStorageMessage('连接已删除。');
+    const remaining = settings.storageProfiles.filter((profile) => profile.provider !== profileDraft.provider);
+    await update({ storageProfiles: remaining, activeStorageProfileId: null });
+    setProfileDraft(createStorageProfile(profileDraft.provider));
+    setStorageMessage(`${profileName(profileDraft.provider)}的配置已清空。`);
   };
 
-  const exportSettings = () => {
-    const payload = createSettingsExport(settings);
-    downloadText(JSON.stringify(payload, null, 2), 'workbench-settings.json', 'application/json');
-    setImportMessage('已导出不含密钥和请求头内容的配置。');
+  const exportBackup = async () => {
+    const [shares, categories] = await Promise.all([
+      db.shares.orderBy('createdAt').reverse().toArray(),
+      db.fileCategories.orderBy('createdAt').toArray(),
+    ]);
+    const payload = createWorkbenchBackup(settings, shares, categories);
+    downloadText(JSON.stringify(payload, null, 2), 'workbench-backup.json', 'application/json');
+    setImportMessage(`已备份偏好和 ${shares.length} 条文件记录；密钥与身份信息未写入备份。`);
   };
 
-  const importSettings = async (file: File) => {
+  const importBackup = async (file: File) => {
     try {
-      const imported = parseSettingsImport(JSON.parse(await file.text()) as unknown);
-      await update(imported);
-      setImportMessage('配置已导入；出于安全考虑，凭据需要重新填写。');
+      const imported = parseWorkbenchImport(JSON.parse(await file.text()) as unknown);
+      if (imported.fileLibrary) {
+        const existingCount = await db.shares.count();
+        if (existingCount > 0 && !window.confirm(`恢复备份会替换当前的 ${existingCount} 条文件记录，继续吗？`)) return;
+        await db.transaction('rw', db.shares, db.fileCategories, async () => {
+          await Promise.all([db.shares.clear(), db.fileCategories.clear()]);
+          if (imported.fileLibrary?.shares.length) await db.shares.bulkPut(imported.fileLibrary.shares);
+          if (imported.fileLibrary?.categories.length) await db.fileCategories.bulkPut(imported.fileLibrary.categories);
+        });
+      }
+      await update(imported.settings);
+      const importedActive = imported.settings.storageProfiles.find((profile) => profile.id === imported.settings.activeStorageProfileId);
+      if (importedActive) setStorageProvider(importedActive.provider);
+      setImportMessage(imported.fileLibrary
+        ? `已恢复偏好和 ${imported.fileLibrary.shares.length} 条文件记录；请重新填写密钥或身份信息。`
+        : '旧版配置已导入；请重新填写密钥或身份信息。');
     } catch (error) {
-      setImportMessage(error instanceof Error ? error.message : '无法读取配置文件。');
+      setImportMessage(error instanceof Error ? error.message : '无法读取备份文件。');
     }
   };
 
@@ -389,20 +426,20 @@ export function SettingsPage({ route, navigate }: PageProps) {
           <>
             <header className="settings-title"><h2>云端分享</h2><p>只有上传文件或生成在线链接时才需要设置。</p></header>
             <div className="storage-reassurance"><ShieldCheck aria-hidden="true" size={20} /><div><strong>本地使用无需设置</strong><p>新建、打开、编辑、阅读和导出文档始终可用。没有存储连接时，只会关闭上传和在线分享。</p></div></div>
-            <div className="profile-toolbar">
-              {settings.storageProfiles.length > 0 ? <label className="settings-field"><span>已保存的连接</span><select onChange={(event) => void update({ activeStorageProfileId: event.target.value })} value={activeProfile?.id ?? ''}>{settings.storageProfiles.map((profile) => <option key={profile.id} value={profile.id}>{profile.name} · {profile.provider === 'gateway' ? '单位提供' : '阿里云'}</option>)}</select></label> : <div className="storage-empty"><strong>尚未连接云端存储</strong><small>可以继续只在本地使用，或按需选择一种连接方式。</small></div>}
-              <div className="profile-toolbar__actions"><Button icon={Plus} onClick={() => void addProfile('aliyun-oss')} size="small" variant="primary">我的阿里云存储</Button><Button icon={Plus} onClick={() => void addProfile('gateway')} size="small">单位提供的连接</Button></div>
+            <div className="storage-method-picker">
+              <div><strong>连接方式</strong><small>选择一种当前使用的方式，配置只在这里维护。</small></div>
+              <div aria-label="云端连接方式" className="segmented-control">
+                <button aria-pressed={storageProvider === 'gateway'} onClick={() => void selectStorageProvider('gateway')} type="button">API 方式</button>
+                <button aria-pressed={storageProvider === 'aliyun-oss'} onClick={() => void selectStorageProvider('aliyun-oss')} type="button">阿里云 OSS</button>
+              </div>
             </div>
 
-            {profileDraft ? (
-              <section className="storage-form">
-                <div className="storage-form__status"><div><strong>{profileDraft.provider === 'gateway' ? '单位或服务提供的连接' : '我的阿里云存储'}</strong><p>{profileDraft.provider === 'gateway' ? '参考旧版 MD·HTML：填写完整的上传接口地址、Bucket 和用户标识；不要把这个地址填到阿里云 Endpoint。' : '个人直接连接阿里云：地域填 oss-cn-…，Endpoint 通常留空，再填写 Bucket 和 AccessKey。'}</p></div><StatusPill tone={isStorageProfileConfigured(profileDraft) ? 'success' : 'warning'}>{isStorageProfileConfigured(profileDraft) ? '可以使用' : '尚未配置'}</StatusPill></div>
+            <section className="storage-form">
+                <div className="storage-form__status"><div><strong>{profileName(profileDraft.provider)}</strong><p>{profileDraft.provider === 'gateway' ? '适合单位或服务提供者给了上传地址、Bucket 和用户标识的情况。' : '直接连接个人阿里云 OSS，填写地域、Bucket 和长期 AccessKey。'}</p></div><StatusPill tone={isStorageProfileConfigured(profileDraft) ? 'success' : 'warning'}>{isStorageProfileConfigured(profileDraft) ? '可以使用' : '尚未配置'}</StatusPill></div>
                 <div className="storage-fields">
-                  <label className="settings-field settings-field--wide"><span>连接名称</span><input onChange={(event) => setDraft({ name: event.target.value })} value={profileDraft.name} /></label>
-
                   {profileDraft.provider === 'gateway' ? (
                     <>
-                      <label className="settings-field settings-field--wide"><span>上传地址</span><input inputMode="url" onChange={(event) => setDraft({ apiUrl: event.target.value })} placeholder="完整的上传接口地址，例如 https://…/upload" value={profileDraft.apiUrl} /></label>
+                      <label className="settings-field settings-field--wide"><span>API 上传地址</span><input inputMode="url" onChange={(event) => setDraft({ apiUrl: event.target.value })} placeholder="完整地址，例如 https://…/upload" value={profileDraft.apiUrl} /></label>
                       <label className="settings-field"><span>存储空间名称</span><input onChange={(event) => setDraft({ bucket: event.target.value })} placeholder="由管理员提供" value={profileDraft.bucket} /></label>
                       <label className="settings-field"><span>用户标识</span><input onChange={(event) => setDraft({ userCode: event.target.value })} placeholder="由管理员提供" value={profileDraft.userCode} /></label>
                       <label className="setting-toggle"><input checked={profileDraft.cdn} onChange={(event) => setDraft({ cdn: event.target.checked })} type="checkbox" /><span><strong>使用加速地址</strong><small>仅在服务提供者要求时开启</small></span></label>
@@ -444,9 +481,8 @@ export function SettingsPage({ route, navigate }: PageProps) {
                   )}
                 </div>
                 {storageMessage ? <p className="settings-message" role="status">{storageMessage}</p> : null}
-                <div className="storage-form__actions"><Button onClick={() => void deleteProfile()} variant="danger">删除连接</Button><Button disabled={testingStorage} onClick={() => void testProfile()}>{testingStorage ? '正在测试' : '测试连接'}</Button><Button onClick={() => void saveProfile()} variant="primary">保存连接</Button></div>
+                <div className="storage-form__actions"><Button onClick={() => void clearProfile()} variant="danger">清空此方式</Button><Button disabled={testingStorage} onClick={() => void testProfile()}>{testingStorage ? '正在测试' : '测试连接'}</Button><Button onClick={() => void saveProfile()} variant="primary">保存配置</Button></div>
               </section>
-            ) : null}
           </>
         ) : null}
 
@@ -454,14 +490,14 @@ export function SettingsPage({ route, navigate }: PageProps) {
           <>
             <header className="settings-title"><h2>权限与隐私</h2><p>Workbench 默认在本机处理文档，只有你主动上传时才连接配置的存储。</p></header>
             <section className="settings-section">
-              <div className="settings-section__label"><h3>配置备份</h3><p>导出的配置不会包含密码、密钥或身份信息。</p></div>
-              <div className="settings-section__control action-row"><Button icon={Download} onClick={exportSettings}>导出配置</Button><Button icon={Upload} onClick={() => importInput.current?.click()}>导入配置</Button><input accept="application/json,.json" className="sr-only" onChange={(event) => { const file = event.target.files?.[0]; if (file) void importSettings(file); event.target.value = ''; }} ref={importInput} type="file" /></div>
+              <div className="settings-section__label"><h3>更新与备份</h3><p>直接更新插件会保留数据；卸载会清除偏好、草稿和文件库。必须卸载时，请先备份。</p></div>
+              <div className="settings-section__control action-row"><Button icon={Download} onClick={() => void exportBackup()}>备份偏好与文件库</Button><Button icon={Upload} onClick={() => importInput.current?.click()}>恢复备份</Button><input accept="application/json,.json" className="sr-only" onChange={(event) => { const file = event.target.files?.[0]; if (file) void importBackup(file); event.target.value = ''; }} ref={importInput} type="file" /></div>
             </section>
             <section className="settings-section">
               <div className="settings-section__label"><h3>本地数据</h3><p>草稿和分享记录只保存在当前浏览器中；清除扩展数据或卸载扩展也会删除它们。</p></div>
               <div className="settings-section__control"><Button icon={Trash2} onClick={() => void clearLocalData()} variant="danger">清除本地数据</Button></div>
             </section>
-            <section className="privacy-facts" aria-label="数据使用说明"><div><strong>文档内容</strong><p>只在你主动分享或上传时发送到当前选择的存储服务。</p></div><div><strong>配置同步</strong><p>所有设置均使用本地存储，不写入浏览器同步空间。</p></div><div><strong>网页权限</strong><p>读取网址时按站点单独申请，不在安装时请求访问全部网站。</p></div></section>
+            <section className="privacy-facts" aria-label="数据使用说明"><div><strong>文档内容</strong><p>只在你主动分享或上传时发送到当前选择的存储服务。</p></div><div><strong>升级数据</strong><p>同一插件直接更新会保留；卸载后 Chrome 会删除本地数据。</p></div><div><strong>网页权限</strong><p>读取网址时按站点单独申请，不在安装时请求访问全部网站。</p></div></section>
             {importMessage ? <p className="settings-message" role="status">{importMessage}</p> : null}
           </>
         ) : null}

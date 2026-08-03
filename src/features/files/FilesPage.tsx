@@ -10,7 +10,6 @@ import {
   FileArchive,
   FileText,
   Folder,
-  FolderInput,
   FolderPlus,
   FolderUp,
   Link2,
@@ -43,7 +42,7 @@ import {
   type FileKind,
 } from '@/features/files/file-library';
 import { downloadRemoteFile } from '@/features/files/remote-download';
-import { formatShareText } from '@/features/files/share-text';
+import { formatShareRecords, formatShareText } from '@/features/files/share-text';
 import type { ExportFormat } from '@/features/markdown/exporters/contract';
 import { exportAppearanceFromSettings } from '@/features/markdown/exporters/export-appearance';
 import { getExporter } from '@/features/markdown/exporters/registry';
@@ -75,6 +74,8 @@ interface UploadTask {
   progress: number;
   error: string;
   result?: UploadResult;
+  record?: ShareRecord;
+  autoCopyOnSuccess: boolean;
   controller: AbortController;
 }
 
@@ -211,7 +212,6 @@ export function FilesPage({ route, navigate }: PageProps) {
   const [editingCategoryName, setEditingCategoryName] = useState('');
   const [renameRecord, setRenameRecord] = useState<ShareRecord | null>(null);
   const [renameValue, setRenameValue] = useState('');
-  const [moveIds, setMoveIds] = useState<string[] | null>(null);
   const [toast, setToast] = useState<{ id: number; message: string; kind: 'info' | 'success' | 'error' } | null>(null);
   const fileInput = useRef<HTMLInputElement>(null);
   const folderInput = useRef<HTMLInputElement>(null);
@@ -225,6 +225,8 @@ export function FilesPage({ route, navigate }: PageProps) {
   const toastTimer = useRef<number | null>(null);
   const dragDepth = useRef(0);
   const knownCategories = useRef(new Set<string>());
+  const pendingTaskPatches = useRef(new Map<string, Partial<UploadTask>>());
+  const taskUpdateFrame = useRef<number | null>(null);
 
   const activeProfile = useMemo(
     () => getActiveStorageProfile(settings.storageProfiles, settings.activeStorageProfileId),
@@ -276,19 +278,19 @@ export function FilesPage({ route, navigate }: PageProps) {
 
   useEffect(() => () => {
     if (toastTimer.current !== null) window.clearTimeout(toastTimer.current);
+    if (taskUpdateFrame.current !== null) window.cancelAnimationFrame(taskUpdateFrame.current);
   }, []);
 
   useEffect(() => {
-    if (!categoryManagerOpen && !renameRecord && !moveIds) return;
+    if (!categoryManagerOpen && !renameRecord) return;
     const close = (event: KeyboardEvent) => {
       if (event.key !== 'Escape') return;
       setCategoryManagerOpen(false);
       setRenameRecord(null);
-      setMoveIds(null);
     };
     document.addEventListener('keydown', close);
     return () => document.removeEventListener('keydown', close);
-  }, [categoryManagerOpen, moveIds, renameRecord]);
+  }, [categoryManagerOpen, renameRecord]);
 
   useEffect(() => {
     setSelectedIds((current) => {
@@ -324,9 +326,19 @@ export function FilesPage({ route, navigate }: PageProps) {
     }
   }, [navigate, route.params, storageReady]);
 
-  const updateTask = (id: string, patch: Partial<UploadTask>) => {
-    setTasks((current) => current.map((task) => task.id === id ? { ...task, ...patch } : task));
-  };
+  const updateTask = useCallback((id: string, patch: Partial<UploadTask>) => {
+    pendingTaskPatches.current.set(id, { ...pendingTaskPatches.current.get(id), ...patch });
+    if (taskUpdateFrame.current !== null) return;
+    taskUpdateFrame.current = window.requestAnimationFrame(() => {
+      taskUpdateFrame.current = null;
+      const patches = pendingTaskPatches.current;
+      pendingTaskPatches.current = new Map();
+      setTasks((current) => current.map((task) => {
+        const next = patches.get(task.id);
+        return next ? { ...task, ...next } : task;
+      }));
+    });
+  }, []);
 
   const rememberCategory = useCallback(async (name: string) => {
     if (name === UNCATEGORIZED || knownCategories.current.has(name)) return;
@@ -412,30 +424,33 @@ export function FilesPage({ route, navigate }: PageProps) {
   const shareRecord = async (record: ShareRecord) => {
     try {
       const current = await freshRecord(record);
-      if (navigator.share) {
-        await navigator.share({ title: current.displayName, url: current.url });
-        return;
-      }
-      await navigator.clipboard.writeText(current.url);
-      notify('当前设备没有系统分享面板，链接已复制。', 'success');
+      await navigator.clipboard.writeText(formatShareText(current, settingsRef.current.shareCopyFormat));
+      notify(`已复制“${current.displayName}”的分享文字。`, 'success');
     } catch (error) {
-      if (error instanceof DOMException && error.name === 'AbortError') return;
       notify(error instanceof Error ? error.message : '无法分享这个文件。', 'error');
     }
   };
 
   const downloadRecord = async (record: ShareRecord, quiet = false) => {
     const current = await freshRecord(record);
-    const result = await downloadRemoteFile({ url: current.url, preferredFileName: current.displayName });
-    if (!quiet) notify(`已开始下载“${result.fileName}”。`, 'success');
+    const result = await downloadRemoteFile({
+      url: current.url,
+      preferredFileName: current.displayName,
+      fallbackToOpen: !quiet,
+    });
+    if (!quiet) notify(result.delivery === 'opened'
+      ? '这个地址不允许直接保存，已在新标签打开。'
+      : `已开始下载“${result.fileName}”。`, 'success');
   };
 
   async function uploadTask(task: UploadTask) {
     const profile = profileRef.current;
     if (!profile || !isStorageProfileConfigured(profile)) {
+      task.status = 'failed';
       updateTask(task.id, { status: 'failed', error: '请先连接存储。' });
       return;
     }
+    task.status = 'uploading';
     updateTask(task.id, { status: 'uploading', progress: 0, error: '' });
     try {
       const result = await storageService.upload(profile, {
@@ -445,7 +460,7 @@ export function FilesPage({ route, navigate }: PageProps) {
         access: defaultAccess(profile),
         signal: task.controller.signal,
         onProgress: (progress) => {
-          if (progress < 1 && progress - task.progress < 0.025) return;
+          if (progress < 1 && progress - task.progress < 0.08) return;
           task.progress = progress;
           updateTask(task.id, { progress });
         },
@@ -459,9 +474,13 @@ export function FilesPage({ route, navigate }: PageProps) {
         result,
       );
       task.result = result;
-      updateTask(task.id, { status: 'success', progress: 1, result });
-      setDestination({ kind: 'online-share', label: record.displayName, detail: accessLabel(record) });
-      if (settingsRef.current.autoCopyShareLink) {
+      task.record = record;
+      task.status = 'success';
+      updateTask(task.id, { status: 'success', progress: 1, result, record });
+      if (task.autoCopyOnSuccess) {
+        setDestination({ kind: 'online-share', label: record.displayName, detail: accessLabel(record) });
+      }
+      if (task.autoCopyOnSuccess && settingsRef.current.autoCopyShareLink) {
         try {
           await copyAutoShare(record);
         } catch {
@@ -470,8 +489,10 @@ export function FilesPage({ route, navigate }: PageProps) {
       }
     } catch (error) {
       if (error instanceof DOMException && error.name === 'AbortError') {
+        task.status = 'cancelled';
         updateTask(task.id, { status: 'cancelled', error: '上传已取消。' });
       } else {
+        task.status = 'failed';
         updateTask(task.id, { status: 'failed', error: error instanceof Error ? error.message : '上传失败。' });
       }
     }
@@ -502,12 +523,13 @@ export function FilesPage({ route, navigate }: PageProps) {
     const next = validCandidates.map(({ file, relativePath }): UploadTask => ({
       id: nanoid(),
       file,
-      fileName: relativePath,
+      fileName: file.name,
       relativePath,
       category: topFolder(relativePath) ?? uploadCategory,
       status: 'queued',
       progress: 0,
       error: '',
+      autoCopyOnSuccess: validCandidates.length === 1,
       controller: new AbortController(),
     }));
     pendingQueue.current.push(...next);
@@ -639,7 +661,6 @@ export function FilesPage({ route, navigate }: PageProps) {
     const idSet = new Set(ids);
     await db.shares.where('id').anyOf(ids).modify({ category });
     setHistory((current) => current.map((record) => idSet.has(record.id) ? { ...record, category } : record));
-    setMoveIds(null);
     setSelectedIds(new Set());
     notify(`已将 ${ids.length} 个文件移到“${category}”。`, 'success');
   };
@@ -685,7 +706,9 @@ export function FilesPage({ route, navigate }: PageProps) {
         url: downloadUrl,
         preferredFileName: downloadName.trim() || undefined,
       });
-      notify(`已开始下载“${result.fileName}”。`, 'success');
+      notify(result.delivery === 'opened'
+        ? '这个地址不允许直接保存，已在新标签打开。'
+        : `已开始下载“${result.fileName}”。`, 'success');
     } catch (error) {
       notify(error instanceof Error ? error.message : '下载失败，请检查地址。', 'error');
     } finally {
@@ -763,16 +786,11 @@ export function FilesPage({ route, navigate }: PageProps) {
     setBatchBusy(true);
     try {
       const records = await Promise.all(selectedRecords.map(freshRecord));
-      const text = records.map((record) => `${record.displayName}\n${record.url}`).join('\n\n');
-      if (navigator.share) await navigator.share({ title: `${records.length} 个文件`, text });
-      else {
-        await navigator.clipboard.writeText(text);
-        notify('当前设备没有系统分享面板，分享信息已复制。', 'success');
-      }
+      const text = formatShareRecords(records, settingsRef.current.shareCopyFormat);
+      await navigator.clipboard.writeText(text);
+      notify(`已复制 ${records.length} 个文件的分享文字。`, 'success');
     } catch (error) {
-      if (!(error instanceof DOMException && error.name === 'AbortError')) {
-        notify(error instanceof Error ? error.message : '无法分享所选文件。', 'error');
-      }
+      notify(error instanceof Error ? error.message : '无法分享所选文件。', 'error');
     } finally {
       setBatchBusy(false);
     }
@@ -866,7 +884,7 @@ export function FilesPage({ route, navigate }: PageProps) {
                 <span className={`upload-task__state upload-task__state--${task.status}`}>{task.status === 'success' ? <Check size={16} /> : task.status === 'failed' ? <X size={16} /> : <FileArchive size={16} />}</span>
                 <span className="upload-task__copy"><input aria-label="上传文件名" disabled={task.status !== 'queued'} onChange={(event) => { task.fileName = event.target.value; updateTask(task.id, { fileName: event.target.value }); }} value={task.fileName} /><small>{formatBytes(task.file.size)} · {task.error || ({ queued: '等待上传', uploading: `上传中 ${Math.round(task.progress * 100)}%`, success: '上传成功', failed: '上传失败', cancelled: '已取消' }[task.status])}</small></span>
                 <span className="upload-task__progress"><i style={{ width: `${Math.round(task.progress * 100)}%` }} /></span>
-                {task.status === 'failed' || task.status === 'cancelled' ? <IconButton icon={RotateCcw} label="重试" onClick={() => retryTask(task)} /> : task.status === 'success' && task.result ? <IconButton icon={Copy} label="复制链接" onClick={() => { void navigator.clipboard.writeText(task.result?.url ?? '').then(() => notify('链接已复制。', 'success')).catch(() => notify('浏览器没有允许复制链接。', 'error')); }} /> : <IconButton icon={X} label="取消上传" onClick={() => cancelTask(task)} />}
+                {task.status === 'failed' || task.status === 'cancelled' ? <IconButton icon={RotateCcw} label="重试" onClick={() => retryTask(task)} /> : task.status === 'success' && task.record ? <div className="upload-task__actions"><IconButton icon={ExternalLink} label="打开上传文件" onClick={() => void openRecord(task.record as ShareRecord)} /><IconButton icon={Download} label="下载上传文件" onClick={() => void downloadRecord(task.record as ShareRecord).catch((error) => notify(error instanceof Error ? error.message : '下载失败。', 'error'))} /><IconButton icon={Share2} label="复制分享文字" onClick={() => void shareRecord(task.record as ShareRecord)} /></div> : <IconButton icon={X} label="取消上传" onClick={() => cancelTask(task)} />}
               </div>
             ))}
           </div>
@@ -913,7 +931,7 @@ export function FilesPage({ route, navigate }: PageProps) {
             <div className="batch-toolbar">
               <strong>已选 {selectedRecords.length} 个</strong>
               <span />
-              <Button disabled={batchBusy} icon={FolderInput} onClick={() => setMoveIds(selectedRecords.map((record) => record.id))} size="small">移动分类</Button>
+              <label className="batch-move"><Folder aria-hidden="true" size={15} /><select aria-label="移动所选文件到分类" defaultValue="" disabled={batchBusy} onChange={(event) => { if (event.target.value) void moveRecords(selectedRecords.map((record) => record.id), event.target.value); }}><option disabled value="">移动到分类…</option><option value={UNCATEGORIZED}>{UNCATEGORIZED}</option>{categories.map((category) => <option key={category} value={category}>{category}</option>)}</select></label>
               <IconButton disabled={batchBusy} icon={Share2} label="分享所选文件" onClick={() => void batchShare()} />
               <IconButton disabled={batchBusy} icon={Download} label="下载所选文件" onClick={() => void batchDownload()} />
               <IconButton disabled={batchBusy} icon={Copy} label="复制所选链接" onClick={() => void batchCopyLinks()} />
@@ -927,7 +945,7 @@ export function FilesPage({ route, navigate }: PageProps) {
           <div className="share-record-list">
             <div className="share-record-list__header">
               <label><input checked={allFilteredSelected} onChange={toggleSelectAll} type="checkbox" /><span>全选当前结果</span></label>
-              <span>名称与分类</span><span>类型</span><span>上传时间</span><span>操作</span>
+              <span>名称</span><span>分类</span><span>类型</span><span>上传时间</span><span>操作</span>
             </div>
             {visibleHistory.map((record) => {
               const kind = fileKindForName(record.displayName);
@@ -935,16 +953,16 @@ export function FilesPage({ route, navigate }: PageProps) {
                 <div className={`share-record ${selectedIds.has(record.id) ? 'share-record--selected' : ''}`} key={record.id}>
                   <input aria-label={`选择 ${record.displayName}`} checked={selectedIds.has(record.id)} onChange={() => setSelectedIds((current) => { const next = new Set(current); if (next.has(record.id)) next.delete(record.id); else next.add(record.id); return next; })} type="checkbox" />
                   <span className={`share-record__icon share-record__icon--${kind}`}><FileText aria-hidden="true" size={17} /></span>
-                  <span className="share-record__main"><strong title={record.displayName}>{record.displayName}</strong><small title={record.relativePath}>{record.category || UNCATEGORIZED} · {formatBytes(record.size)}{record.relativePath && record.relativePath !== record.displayName ? ` · ${record.relativePath}` : ''}</small></span>
+                  <span className="share-record__main"><strong title={record.displayName}>{record.displayName}</strong><small title={record.relativePath}>{formatBytes(record.size)}{record.relativePath && record.relativePath !== record.displayName ? ` · ${record.relativePath}` : ''}</small></span>
+                  <select aria-label={`移动 ${record.displayName} 到分类`} className="record-category-select" onChange={(event) => void moveRecords([record.id], event.target.value)} value={record.category || UNCATEGORIZED}><option value={UNCATEGORIZED}>{UNCATEGORIZED}</option>{categories.map((category) => <option key={category} value={category}>{category}</option>)}</select>
                   <span className={`record-kind record-kind--${kind}`}><i />{FILE_KIND_LABELS[kind]}</span>
                   <time>{formatDate(record.createdAt)}</time>
                   <div className="share-record__actions">
-                    <IconButton icon={ExternalLink} label="查看文件" onClick={() => void openRecord(record)} />
-                    <IconButton icon={Share2} label="分享文件" onClick={() => void shareRecord(record)} />
+                    <button className="record-text-action" onClick={() => void openRecord(record)} type="button"><ExternalLink aria-hidden="true" size={13} />打开</button>
+                    <button className="record-text-action" onClick={() => void downloadRecord(record).catch((error) => notify(error instanceof Error ? error.message : '下载失败。', 'error'))} type="button"><Download aria-hidden="true" size={13} />下载</button>
+                    <button className="record-text-action" onClick={() => void shareRecord(record)} type="button"><Share2 aria-hidden="true" size={13} />分享</button>
                     <IconButton icon={Copy} label="复制链接" onClick={() => void copyLink(record)} />
                     <IconButton icon={Pencil} label="重命名" onClick={() => { setRenameRecord(record); setRenameValue(record.displayName); }} />
-                    <IconButton icon={Download} label="下载文件" onClick={() => void downloadRecord(record).catch((error) => notify(error instanceof Error ? error.message : '下载失败。', 'error'))} />
-                    <IconButton icon={FolderInput} label="移动分类" onClick={() => setMoveIds([record.id])} />
                     <IconButton icon={Trash2} label="从文件库移除" onClick={() => void removeRecords([record])} />
                   </div>
                 </div>
@@ -974,13 +992,6 @@ export function FilesPage({ route, navigate }: PageProps) {
           <header><div><p className="page-kicker">文件名称</p><h2 id="rename-file-title">重命名</h2></div><IconButton icon={X} label="关闭" onClick={() => setRenameRecord(null)} /></header>
           <form className="simple-dialog-form" onSubmit={(event) => { event.preventDefault(); void saveRecordRename(); }}><label><span>在文件库中显示为</span><input autoFocus onChange={(event) => setRenameValue(event.target.value)} value={renameValue} /></label><div><Button onClick={() => setRenameRecord(null)} type="button">取消</Button><Button disabled={!renameValue.trim()} type="submit" variant="primary">保存名称</Button></div></form>
           <footer>这里只改文件库中的显示名称，云端文件名和分享链接不会变化。</footer>
-        </LibraryDialog>
-      ) : null}
-
-      {moveIds ? (
-        <LibraryDialog className="move-category-dialog" labelledBy="move-category-title" onClose={() => setMoveIds(null)}>
-          <header><div><p className="page-kicker">文件分类</p><h2 id="move-category-title">移动 {moveIds.length} 个文件</h2></div><IconButton icon={X} label="关闭" onClick={() => setMoveIds(null)} /></header>
-          <div className="move-category-list"><button onClick={() => void moveRecords(moveIds, UNCATEGORIZED)} type="button"><Folder aria-hidden="true" size={18} /><span><strong>{UNCATEGORIZED}</strong><small>{categoryCounts.get(UNCATEGORIZED) ?? 0} 个文件</small></span></button>{categories.map((category) => <button key={category} onClick={() => void moveRecords(moveIds, category)} type="button"><Folder aria-hidden="true" size={18} /><span><strong>{category}</strong><small>{categoryCounts.get(category) ?? 0} 个文件</small></span></button>)}</div>
         </LibraryDialog>
       ) : null}
 

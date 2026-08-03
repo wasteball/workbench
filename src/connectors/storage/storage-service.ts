@@ -16,6 +16,7 @@ const connectorLoaders: Record<StorageProfile['provider'], () => Promise<Storage
 
 const connectorCache = new Map<StorageProfile['provider'], StorageConnector>();
 const sessions = new Map<string, ConnectorSession>();
+const sessionPromises = new Map<string, Promise<ConnectorSession>>();
 
 async function connectorFor(profile: StorageProfile): Promise<StorageConnector> {
   const cached = connectorCache.get(profile.provider);
@@ -34,10 +35,18 @@ function sessionNeedsRefresh(session: ConnectorSession): boolean {
 async function ensureSession(profile: StorageProfile, force = false): Promise<ConnectorSession> {
   const current = sessions.get(profile.id);
   if (!force && current && !sessionNeedsRefresh(current)) return current;
-  const connector = await connectorFor(profile);
-  const session = await connector.connect(profile);
-  sessions.set(profile.id, session);
-  return session;
+  const inFlight = sessionPromises.get(profile.id);
+  if (!force && inFlight) return inFlight;
+
+  const pending = connectorFor(profile).then((connector) => connector.connect(profile));
+  sessionPromises.set(profile.id, pending);
+  try {
+    const session = await pending;
+    if (sessionPromises.get(profile.id) === pending) sessions.set(profile.id, session);
+    return session;
+  } finally {
+    if (sessionPromises.get(profile.id) === pending) sessionPromises.delete(profile.id);
+  }
 }
 
 export const storageService = {
@@ -78,5 +87,6 @@ export const storageService = {
 
   forget(profileId: string): void {
     sessions.delete(profileId);
+    sessionPromises.delete(profileId);
   },
 };
