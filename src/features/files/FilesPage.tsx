@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   Check,
+  ChevronDown,
   ChevronsDown,
   ChevronsUp,
   CloudUpload,
@@ -435,7 +436,7 @@ export function FilesPage({ route, navigate }: PageProps) {
     const current = await freshRecord(record);
     const result = await downloadRemoteFile({
       url: current.url,
-      preferredFileName: current.displayName,
+      preferredFileName: current.fileName,
       fallbackToOpen: !quiet,
     });
     if (!quiet) notify(result.delivery === 'opened'
@@ -891,14 +892,20 @@ export function FilesPage({ route, navigate }: PageProps) {
         </section>
       ) : null}
 
-      <section className="link-download-panel">
-        <div className="section-heading"><div><h2>通过链接下载</h2><p>粘贴对象存储地址，自动保留原文件名和中文名称。</p></div></div>
-        <div className="link-download-form">
-          <label className="link-download-url"><Link2 aria-hidden="true" size={17} /><input aria-label="文件下载地址" onChange={(event) => setDownloadUrl(event.target.value)} onKeyDown={(event) => { if (event.key === 'Enter') void runDirectDownload(); }} placeholder="粘贴文件地址" value={downloadUrl} /></label>
-          <input aria-label="保存文件名（可选）" className="link-download-name" onChange={(event) => setDownloadName(event.target.value)} onKeyDown={(event) => { if (event.key === 'Enter') void runDirectDownload(); }} placeholder="保存名称（可选）" value={downloadName} />
-          <Button disabled={downloadBusy} icon={Download} onClick={() => void runDirectDownload()} variant="primary">{downloadBusy ? '正在下载' : '下载文件'}</Button>
+      <details className="link-download-panel">
+        <summary>
+          <span><strong>通过链接下载</strong><small>有文件地址时再展开使用</small></span>
+          <ChevronDown aria-hidden="true" size={18} />
+        </summary>
+        <div className="link-download-content">
+          <p>粘贴对象存储地址，自动保留原文件名和中文名称。</p>
+          <div className="link-download-form">
+            <label className="link-download-url"><Link2 aria-hidden="true" size={17} /><input aria-label="文件下载地址" onChange={(event) => setDownloadUrl(event.target.value)} onKeyDown={(event) => { if (event.key === 'Enter') void runDirectDownload(); }} placeholder="粘贴文件地址" value={downloadUrl} /></label>
+            <input aria-label="保存文件名（可选）" className="link-download-name" onChange={(event) => setDownloadName(event.target.value)} onKeyDown={(event) => { if (event.key === 'Enter') void runDirectDownload(); }} placeholder="保存名称（可选）" value={downloadName} />
+            <Button disabled={downloadBusy} icon={Download} onClick={() => void runDirectDownload()} variant="primary">{downloadBusy ? '正在下载' : '下载文件'}</Button>
+          </div>
         </div>
-      </section>
+      </details>
 
       <section className="file-library">
         <div className="section-heading file-library__heading">

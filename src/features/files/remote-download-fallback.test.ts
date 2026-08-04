@@ -1,18 +1,12 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 const mocks = vi.hoisted(() => ({
-  contains: vi.fn(),
-  request: vi.fn(),
   createTab: vi.fn(),
   downloadBlob: vi.fn(),
 }));
 
 vi.mock('wxt/browser', () => ({
   browser: {
-    permissions: {
-      contains: mocks.contains,
-      request: mocks.request,
-    },
     tabs: {
       create: mocks.createTab,
     },
@@ -27,15 +21,41 @@ import { downloadRemoteFile } from '@/features/files/remote-download';
 
 describe('remote download fallback', () => {
   beforeEach(() => {
-    mocks.contains.mockResolvedValue(true);
-    mocks.request.mockResolvedValue(true);
     mocks.createTab.mockResolvedValue({ id: 1 });
+    vi.stubGlobal('window', globalThis);
     vi.stubGlobal('fetch', vi.fn().mockRejectedValue(new TypeError('Failed to fetch')));
   });
 
   afterEach(() => {
     vi.unstubAllGlobals();
     vi.clearAllMocks();
+  });
+
+  it('downloads a CORS-enabled file without an extra website-permission gate', async () => {
+    const blob = new Blob(['<h1>Workbench</h1>'], { type: 'text/html' });
+    vi.mocked(fetch).mockResolvedValue({
+      ok: true,
+      url: 'https://files.example.com/generated-name.html',
+      blob: async () => blob,
+      headers: {
+        get: (name: string) => {
+          if (name.toLowerCase() === 'content-disposition') return 'filename="原始文件名.html"';
+          if (name.toLowerCase() === 'content-type') return 'text/html; charset=UTF-8';
+          return null;
+        },
+      } as Headers,
+    } as Response);
+
+    await expect(downloadRemoteFile({
+      url: 'https://gateway.example.com/download/hash.html',
+    })).resolves.toEqual({
+      fileName: '原始文件名.html',
+      size: blob.size,
+      delivery: 'downloaded',
+    });
+
+    expect(mocks.downloadBlob).toHaveBeenCalledWith(blob, '原始文件名.html');
+    expect(mocks.createTab).not.toHaveBeenCalled();
   });
 
   it('opens a valid file URL when CORS prevents a direct download', async () => {

@@ -1,7 +1,6 @@
 import { browser } from 'wxt/browser';
 
 import { downloadBlob } from '@/platform/files/download-blob';
-import { ensureWebsitePermission } from '@/platform/permissions/website-permission';
 
 const WRAPPED_URL_PARAMETERS = ['file_path', 'filepath', 'url', 'fileUrl', 'target', 'src'];
 
@@ -101,7 +100,6 @@ export async function downloadRemoteFile({
   fallbackToOpen = true,
 }: DownloadRemoteFileOptions): Promise<DownloadRemoteFileResult> {
   const url = resolveDownloadUrl(rawUrl);
-  if (!await ensureWebsitePermission(url)) throw new Error('未获得该网站的下载权限。');
   const fallbackFileName = safeDownloadFilename(preferredFileName?.trim() || filenameFromUrl(url));
 
   const controller = new AbortController();

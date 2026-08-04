@@ -283,11 +283,57 @@
 
 .link-download-panel {
   border-block: 1px solid var(--color-border);
-  padding: 26px 0;
+  padding: 0;
 }
 
-.link-download-panel .section-heading {
-  margin-bottom: 12px;
+.link-download-panel > summary {
+  display: flex;
+  min-height: 66px;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 12px 0;
+  color: var(--color-ink);
+  cursor: pointer;
+  list-style: none;
+}
+
+.link-download-panel > summary::-webkit-details-marker {
+  display: none;
+}
+
+.link-download-panel > summary > span {
+  display: grid;
+  gap: 3px;
+}
+
+.link-download-panel > summary strong {
+  font-size: 15px;
+  font-weight: 680;
+}
+
+.link-download-panel > summary small,
+.link-download-content > p {
+  color: var(--color-muted);
+  font-size: 12px;
+}
+
+.link-download-panel > summary svg {
+  flex: 0 0 auto;
+  color: var(--color-muted);
+  transition: transform 160ms ease;
+}
+
+.link-download-panel[open] > summary svg {
+  transform: rotate(180deg);
+}
+
+.link-download-content {
+  padding: 0 0 24px;
+}
+
+.link-download-content > p {
+  margin: -2px 0 12px;
 }
 
 .link-download-form {

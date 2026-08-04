@@ -15,6 +15,11 @@ describe('remote download naming', () => {
     )).toBe('学习手册.md');
   });
 
+  it('keeps a plain UTF-8 Chinese filename', () => {
+    expect(filenameFromContentDisposition('filename="WMS产品经理面试与AI实战_复习文档.html"'))
+      .toBe('WMS产品经理面试与AI实战_复习文档.html');
+  });
+
   it('decodes a Chinese URL pathname', () => {
     expect(filenameFromUrl('https://example.com/files/%E9%A1%B9%E7%9B%AE%E8%AF%B4%E6%98%8E.md?token=1'))
       .toBe('项目说明.md');
