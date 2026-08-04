@@ -12,14 +12,14 @@ Workbench 是一个在浏览器里使用的文档工作台。你可以直接打�
 | --- | --- |
 | Chrome | 唯一维护目标，商店版准备中 |
 
-当前发布的 `0.1.13` 是商店上线前的公开预览版。Chrome 用户可以[下载预览版](https://github.com/wasteball/workbench/releases/tag/v0.1.13)，按照页面中的安装说明提前体验。Workbench 只维护、验收和发布 Chrome 插件。
+当前发布的 `0.1.14` 是商店上线前的公开预览版。Chrome 用户可以[下载预览版](https://github.com/wasteball/workbench/releases/tag/v0.1.14)，按照页面中的安装说明提前体验。Workbench 只维护、验收和发布 Chrome 插件。
 
 <details>
 <summary>安装 Chrome 公开预览版</summary>
 
 预览版尚未进入浏览器商店，因此需要手动加载一次：
 
-1. 在[发布页面](https://github.com/wasteball/workbench/releases/tag/v0.1.13)下载文件名包含 `chrome` 的 ZIP 文件。
+1. 在[发布页面](https://github.com/wasteball/workbench/releases/tag/v0.1.14)下载文件名包含 `chrome` 的 ZIP 文件。
 2. 右键 ZIP 文件并选择“全部解压”。
 3. 在 Chrome 地址栏打开 `chrome://extensions`。
 4. 开启页面上的“开发者模式”。
@@ -58,7 +58,7 @@ Workbench 是一个在浏览器里使用的文档工作台。你可以直接打�
 ### 2. 文件上传与在线分享：按需开启
 
 - **上传文件或文件夹**：选择、拖入或粘贴文件；选择文件夹时会递归上传其中的文件，并按顶层文件夹自动归类。
-- **分享文档**：把当前文档生成网页、Word 文档或 Markdown 文件后上传，获得分享链接。
+- **分享文档**：留在当前文档内选择网页、Word 或 Markdown 格式，生成并复制分享链接后可以继续阅读。
 - **文件库**：在当前浏览器中搜索、查看、分享、复制链接、重命名、下载、分类或批量整理上传记录。
 - **通过链接下载**：粘贴对象存储地址直接下载，保留原文件名、中文名称和文件内容。
 - **连接自己的存储**：在“API 方式”和“阿里云 OSS”之间选择一种当前使用的连接。
@@ -85,7 +85,7 @@ Workbench 是一个在浏览器里使用的文档工作台。你可以直接打�
 
 ## 当前版本说明
 
-`0.1.13` 是当前公开预览版，只提供 Chrome 安装包。尚未迁移的旧版能力记录在[功能迁移矩阵](docs/feature-migration.md)中。
+`0.1.14` 是当前公开预览版，只提供 Chrome 安装包。尚未迁移的旧版能力记录在[功能迁移矩阵](docs/feature-migration.md)中。
 
 发现问题可以提交 [GitHub Issue](https://github.com/wasteball/workbench/issues)。安全问题请按[安全策略](SECURITY.md)私下报告。
 
