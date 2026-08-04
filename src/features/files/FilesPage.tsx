@@ -1,10 +1,10 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
+  ArrowUp,
   Check,
   ChevronDown,
   ChevronsDown,
   ChevronsUp,
-  CloudUpload,
   Copy,
   Download,
   ExternalLink,
@@ -17,11 +17,10 @@ import {
   Pencil,
   RotateCcw,
   Search,
-  Settings2,
+  Settings,
   Share2,
   Tags,
   Trash2,
-  Upload,
   X,
 } from 'lucide-react';
 import { nanoid } from 'nanoid';
@@ -44,13 +43,8 @@ import {
 } from '@/features/files/file-library';
 import { downloadRemoteFile } from '@/features/files/remote-download';
 import { formatShareRecords, formatShareText } from '@/features/files/share-text';
-import type { ExportFormat } from '@/features/markdown/exporters/contract';
-import { exportAppearanceFromSettings } from '@/features/markdown/exporters/export-appearance';
-import { getExporter } from '@/features/markdown/exporters/registry';
-import { documentHandoff } from '@/features/markdown/services/document-handoff';
 import type { PageProps } from '@/features/shared/page-props';
 import { db, type ShareRecord } from '@/shared/persistence/database';
-import { documentService } from '@/shared/persistence/document-service';
 import type { StorageProfile } from '@/shared/types';
 import { Button } from '@/shared/ui/Button';
 import { IconButton } from '@/shared/ui/IconButton';
@@ -78,12 +72,6 @@ interface UploadTask {
   record?: ShareRecord;
   autoCopyOnSuccess: boolean;
   controller: AbortController;
-}
-
-interface PendingDocumentShare {
-  documentId: string;
-  title: string;
-  content: string;
 }
 
 interface FileSystemEntryLike {
@@ -186,7 +174,7 @@ function LibraryDialog({
 }
 
 export function FilesPage({ route, navigate }: PageProps) {
-  const { settings, update } = useSettings();
+  const { settings } = useSettings();
   const { resetDestination, setDestination } = useDestination();
   const [tasks, setTasks] = useState<UploadTask[]>([]);
   const [history, setHistory] = useState<ShareRecord[]>([]);
@@ -198,11 +186,6 @@ export function FilesPage({ route, navigate }: PageProps) {
   const [selectedIds, setSelectedIds] = useState<Set<string>>(() => new Set());
   const [visibleLimit, setVisibleLimit] = useState(INITIAL_VISIBLE_FILES);
   const [dragging, setDragging] = useState(false);
-  const [pendingShare, setPendingShare] = useState<PendingDocumentShare | null>(null);
-  const [shareFormat, setShareFormat] = useState<ExportFormat>(settings.defaultShareFormat);
-  const [shareAccess, setShareAccess] = useState<'private' | 'public' | 'provider-managed'>('provider-managed');
-  const [sharing, setSharing] = useState(false);
-  const [shareMessage, setShareMessage] = useState('');
   const [downloadUrl, setDownloadUrl] = useState('');
   const [downloadName, setDownloadName] = useState('');
   const [downloadBusy, setDownloadBusy] = useState(false);
@@ -269,14 +252,6 @@ export function FilesPage({ route, navigate }: PageProps) {
     void refreshLibrary();
   }, [refreshLibrary, resetDestination]);
 
-  useEffect(() => {
-    setShareAccess(defaultAccess(activeProfile));
-  }, [activeProfile]);
-
-  useEffect(() => {
-    setShareFormat(settings.defaultShareFormat);
-  }, [settings.defaultShareFormat]);
-
   useEffect(() => () => {
     if (toastTimer.current !== null) window.clearTimeout(toastTimer.current);
     if (taskUpdateFrame.current !== null) window.cancelAnimationFrame(taskUpdateFrame.current);
@@ -303,27 +278,12 @@ export function FilesPage({ route, navigate }: PageProps) {
 
   useEffect(() => {
     const intent = route.params.get('intent');
-    const documentId = route.params.get('document');
-    const key = `${intent ?? ''}:${documentId ?? ''}`;
+    const key = intent ?? '';
     if (handledIntent.current === key) return;
     handledIntent.current = key;
     if (intent === 'upload') {
       if (storageReady) fileInput.current?.click();
       else navigate('settings', new URLSearchParams({ section: 'storage' }));
-    }
-    if (intent === 'share' && documentId) {
-      const handoff = documentHandoff.take(documentId);
-      if (handoff) {
-        setPendingShare(handoff);
-        return;
-      }
-      void documentService.load(documentId).then((loaded) => {
-        if (loaded?.content !== null && loaded?.content !== undefined) {
-          setPendingShare({ documentId, title: loaded.record.title, content: loaded.content });
-        } else {
-          setShareMessage('当前文档没有恢复草稿，请回到 Markdown 工作区重新选择原文件。');
-        }
-      });
     }
   }, [navigate, route.params, storageReady]);
 
@@ -556,50 +516,6 @@ export function FilesPage({ route, navigate }: PageProps) {
     pendingQueue.current.push(task);
     updateTask(task.id, { status: 'queued', progress: 0, error: '', controller: task.controller });
     pumpQueue();
-  };
-
-  const shareDocument = async () => {
-    if (!pendingShare || !activeProfile || !storageReady) return;
-    setSharing(true);
-    setShareMessage('正在生成文件并上传…');
-    try {
-      const exported = await (await getExporter(shareFormat)).export({
-        markdown: pendingShare.content,
-        title: pendingShare.title,
-        appearance: exportAppearanceFromSettings(settings),
-      });
-      const result = await storageService.upload(activeProfile, {
-        blob: exported.blob,
-        fileName: exported.fileName,
-        contentType: exported.mimeType,
-        access: shareAccess,
-      });
-      const record = await createShareRecord(
-        activeProfile,
-        exported.fileName,
-        exported.fileName,
-        exported.mimeType,
-        'Markdown 分享',
-        result,
-      );
-      await documentService.markShared(pendingShare.documentId);
-      setDestination({ kind: 'online-share', label: pendingShare.title, detail: accessLabel(record) });
-      try {
-        await copyAutoShare(record);
-        setShareMessage(`${accessLabel(record)}已生成，分享信息已复制。`);
-      } catch {
-        setShareMessage(`${accessLabel(record)}已生成，但浏览器没有允许自动复制。可在文件库中复制链接。`);
-      }
-    } catch (error) {
-      setShareMessage(error instanceof Error ? error.message : '在线分享失败，本地文档没有受到影响。');
-    } finally {
-      setSharing(false);
-    }
-  };
-
-  const chooseShareFormat = (format: ExportFormat) => {
-    setShareFormat(format);
-    if (settings.defaultShareFormat !== format) void update({ defaultShareFormat: format });
   };
 
   const addCategory = async () => {
@@ -844,36 +760,36 @@ export function FilesPage({ route, navigate }: PageProps) {
         <StatusPill tone={storageReady ? 'success' : 'warning'}>{storageReady ? `已连接 ${activeProfile?.name}` : '存储尚未连接'}</StatusPill>
       </header>
 
-      {pendingShare ? (
-        <section className="document-share-panel">
-          <div className="document-share-panel__heading"><div><p className="page-kicker">在线分享</p><h2>{pendingShare.title}</h2><p>选择分享格式后生成链接，原文档不会改变。</p></div><IconButton icon={X} label="关闭分享" onClick={() => setPendingShare(null)} /></div>
-          <div className="document-share-options">
-            <div><span>分享格式</span><div className="segmented-control"><button aria-pressed={shareFormat === 'html'} onClick={() => chooseShareFormat('html')} type="button">HTML</button><button aria-pressed={shareFormat === 'docx'} onClick={() => chooseShareFormat('docx')} type="button">Word</button><button aria-pressed={shareFormat === 'markdown'} onClick={() => chooseShareFormat('markdown')} type="button">Markdown</button></div></div>
-            {activeProfile?.provider === 'aliyun-oss' ? <div><span>访问方式</span><div className="segmented-control"><button aria-pressed={shareAccess === 'private'} onClick={() => setShareAccess('private')} type="button">限时链接</button><button aria-pressed={shareAccess === 'public'} onClick={() => setShareAccess('public')} type="button">公开链接</button></div></div> : <div><span>访问方式</span><p>访问范围由当前存储服务决定。</p></div>}
-          </div>
-          {!storageReady ? <div className="inline-warning"><span>在线分享需要先连接存储。</span><Button icon={Settings2} onClick={() => navigate('settings', new URLSearchParams({ section: 'storage' }))} size="small">连接存储</Button></div> : null}
-          {shareMessage ? <p className="share-message" role="status">{shareMessage}</p> : null}
-          <div className="document-share-panel__actions"><Button disabled={sharing || !storageReady} icon={CloudUpload} onClick={() => void shareDocument()} variant="primary">{sharing ? '正在分享' : '生成并复制链接'}</Button></div>
-        </section>
-      ) : null}
-
       <section
         className={`upload-zone ${dragging ? 'upload-zone--dragging' : ''}`}
         onClick={() => { if (storageReady) fileInput.current?.click(); else navigate('settings', new URLSearchParams({ section: 'storage' })); }}
-        role="button"
-        tabIndex={0}
-        onKeyDown={(event) => { if (event.key !== 'Enter' && event.key !== ' ') return; if (storageReady) fileInput.current?.click(); else navigate('settings', new URLSearchParams({ section: 'storage' })); }}
       >
-        <span className="upload-zone__icon"><CloudUpload aria-hidden="true" size={26} /></span>
-        <span><strong>{storageReady ? '拖入、选择或粘贴文件' : '连接存储后即可上传'}</strong><small>{storageReady ? '文件夹会递归上传，并按顶层文件夹自动分类。' : '已保存的文件库记录仍可查看和管理。'}</small></span>
-        <div className="upload-zone__actions"><Button icon={Upload} onClick={(event) => { event.stopPropagation(); if (storageReady) fileInput.current?.click(); else navigate('settings', new URLSearchParams({ section: 'storage' })); }} size="small" variant="primary">选择文件</Button><Button disabled={!storageReady} icon={FolderUp} onClick={(event) => { event.stopPropagation(); folderInput.current?.click(); }} size="small">选择文件夹</Button></div>
+        <ArrowUp aria-hidden="true" className="upload-zone__arrow" size={48} strokeWidth={1.55} />
+        <div className="upload-zone__copy">
+          <p className="upload-zone__title">
+            {storageReady ? <><span>拖拽文件或文件夹到此处，或</span><button aria-label="选择文件" className="upload-zone__choose" onClick={(event) => { event.stopPropagation(); fileInput.current?.click(); }} type="button">点击选择</button></> : <><span>连接存储后即可上传</span><button aria-label="选择文件" className="upload-zone__choose" onClick={(event) => { event.stopPropagation(); navigate('settings', new URLSearchParams({ section: 'storage' })); }} type="button">前往连接</button></>}
+          </p>
+          {storageReady ? (
+            <div className="upload-zone__support">
+              <span>支持多文件与整个文件夹</span>
+              <i aria-hidden="true" />
+              <span className="upload-zone__paste"><kbd>Ctrl</kbd><span>+</span><kbd>V</kbd><span>粘贴</span></span>
+              <i aria-hidden="true" />
+              <Button className="upload-zone__folder-button" icon={FolderUp} onClick={(event) => { event.stopPropagation(); folderInput.current?.click(); }} size="small">上传文件夹</Button>
+            </div>
+          ) : <p className="upload-zone__unavailable">已保存的文件记录仍可查看和管理。</p>}
+        </div>
         <input className="sr-only" multiple onChange={(event) => { if (event.target.files) void addFiles(candidatesFromFileList(event.target.files)); event.target.value = ''; }} ref={fileInput} type="file" />
         <input className="sr-only" multiple onChange={(event) => { if (event.target.files) void addFiles(candidatesFromFileList(event.target.files)); event.target.value = ''; }} ref={folderInput} type="file" {...({ webkitdirectory: '' } as React.InputHTMLAttributes<HTMLInputElement>)} />
       </section>
 
       <div className="upload-category-bar">
-        <label><span>零散文件归类到</span><select onChange={(event) => setUploadCategory(event.target.value)} value={uploadCategory}><option value={UNCATEGORIZED}>{UNCATEGORIZED}</option>{categories.map((category) => <option key={category} value={category}>{category}</option>)}</select></label>
-        <Button icon={Tags} onClick={() => setCategoryManagerOpen(true)} size="small">管理分类</Button>
+        <div className="upload-category-bar__choice">
+          <span>零散文件归类到</span>
+          <select aria-label="零散文件上传分类" onChange={(event) => setUploadCategory(event.target.value)} value={uploadCategory}><option value={UNCATEGORIZED}>{UNCATEGORIZED}</option>{categories.map((category) => <option key={category} value={category}>{category}</option>)}</select>
+          <small>上传文件夹时按文件夹名自动分类</small>
+        </div>
+        <Button className="upload-category-bar__manage" icon={Settings} onClick={() => setCategoryManagerOpen(true)} size="small" variant="quiet">管理分类</Button>
       </div>
 
       {tasks.length > 0 ? (
@@ -894,7 +810,8 @@ export function FilesPage({ route, navigate }: PageProps) {
 
       <details className="link-download-panel">
         <summary>
-          <span><strong>通过链接下载</strong><small>有文件地址时再展开使用</small></span>
+          <span className="link-download-panel__title"><Download aria-hidden="true" size={19} /><strong>通过链接下载</strong></span>
+          <span className="link-download-panel__hint"><span>粘贴链接</span><i aria-hidden="true" /><span>自动识别文件名</span><i aria-hidden="true" /><span>保留中文名称</span></span>
           <ChevronDown aria-hidden="true" size={18} />
         </summary>
         <div className="link-download-content">

@@ -30,10 +30,13 @@ import {
 
 import { useDestination } from '@/app/destination-context';
 import { useSettings } from '@/app/settings-context';
+import { getActiveStorageProfile, isStorageProfileConfigured } from '@/app/storage-status';
 import { ChangeReviewPanel } from '@/features/markdown/components/ChangeReviewPanel';
 import { DocumentRail } from '@/features/markdown/components/DocumentRail';
 import { FindReplaceBar } from '@/features/markdown/components/FindReplaceBar';
 import { ReadingSettingsPanel } from '@/features/markdown/components/ReadingSettingsPanel';
+import { ShareDocumentDialog } from '@/features/markdown/components/ShareDocumentDialog';
+import { formatShareText } from '@/features/files/share-text';
 import { renderMarkdown, type MarkdownRenderResult } from '@/features/markdown/engine/render-markdown';
 import {
   findTextMatches,
@@ -53,7 +56,11 @@ import { MarkdownPreview, type MarkdownPreviewHandle } from '@/features/markdown
 import { toggleTask } from '@/features/markdown/engine/toggle-task';
 import { OpenDocumentDialog } from '@/features/markdown/components/OpenDocumentDialog';
 import { loadMarkdownUrl } from '@/features/markdown/services/load-markdown-url';
-import { documentHandoff } from '@/features/markdown/services/document-handoff';
+import {
+  defaultDocumentShareAccess,
+  shareMarkdownDocument,
+  type DocumentShareAccess,
+} from '@/features/markdown/services/share-markdown-document';
 import type { PageProps } from '@/features/shared/page-props';
 import { downloadBlob } from '@/platform/files/download-blob';
 import {
@@ -129,6 +136,12 @@ export function MarkdownWorkspace({ route, navigate }: PageProps) {
   const [mode, setMode] = useState<EditorMode>('read');
   const [rendered, setRendered] = useState<MarkdownRenderResult>(EMPTY_RENDER);
   const [openDialog, setOpenDialog] = useState<'all' | 'url' | null>(null);
+  const [shareOpen, setShareOpen] = useState(false);
+  const [shareFormat, setShareFormat] = useState<ExportFormat>(settings.defaultShareFormat);
+  const [shareAccess, setShareAccess] = useState<DocumentShareAccess>('provider-managed');
+  const [shareBusy, setShareBusy] = useState(false);
+  const [shareError, setShareError] = useState('');
+  const [generatedShare, setGeneratedShare] = useState<{ url: string; text: string } | null>(null);
   const [railOpen, setRailOpen] = useState(() => !isNarrowViewport() && settings.markdownRailOpen);
   const [reviewOpen, setReviewOpen] = useState(false);
   const [reviewIndex, setReviewIndex] = useState(0);
@@ -166,6 +179,12 @@ export function MarkdownWorkspace({ route, navigate }: PageProps) {
   const handledRoute = useRef('');
   const lastPersistedSnapshot = useRef('');
   const openSequence = useRef(0);
+
+  const activeProfile = useMemo(
+    () => getActiveStorageProfile(settings.storageProfiles, settings.activeStorageProfileId),
+    [settings.activeStorageProfileId, settings.storageProfiles],
+  );
+  const storageReady = isStorageProfileConfigured(activeProfile);
 
   const notify = useCallback((message: string, kind: 'info' | 'success' | 'error' = 'info') => {
     if (toastTimer.current !== null) window.clearTimeout(toastTimer.current);
@@ -671,16 +690,95 @@ export function MarkdownWorkspace({ route, navigate }: PageProps) {
     window.setTimeout(restore, 2_000);
   };
 
-  const shareCurrent = async () => {
+  const shareCurrent = () => {
     if (!active || active.needsSource) return;
     markdownPreview.current?.commitActiveEdit();
-    const currentContent = contentRef.current;
-    if (currentContent !== baseline || title !== active.record.title) {
-      await documentService.updateDraft(active.record.id, currentContent, baseline, title);
+    if (toastTimer.current !== null) {
+      window.clearTimeout(toastTimer.current);
+      toastTimer.current = null;
     }
-    documentHandoff.put({ documentId: active.record.id, title, content: currentContent });
-    navigate('files', new URLSearchParams({ intent: 'share', document: active.record.id }));
+    setToast(null);
+    setShareFormat(settings.defaultShareFormat);
+    setShareAccess(defaultDocumentShareAccess(activeProfile));
+    setShareError('');
+    setGeneratedShare(null);
+    setShareOpen(true);
   };
+
+  const chooseShareFormat = (format: ExportFormat) => {
+    setShareFormat(format);
+    if (settings.defaultShareFormat !== format) void updateSettings({ defaultShareFormat: format });
+  };
+
+  const confirmShareCurrent = async () => {
+    if (!active || active.needsSource || !activeProfile || !storageReady) return;
+    const documentId = active.record.id;
+    const currentContent = contentRef.current;
+    setShareBusy(true);
+    setShareError('');
+    try {
+      if (currentContent !== baseline || title !== active.record.title) {
+        await documentService.updateDraft(documentId, currentContent, baseline, title);
+      }
+      const result = await shareMarkdownDocument({
+        documentId,
+        title,
+        markdown: currentContent,
+        format: shareFormat,
+        appearance: exportAppearanceFromSettings(settings),
+        access: shareAccess,
+        profile: activeProfile,
+      });
+      const shareText = formatShareText(result.record, settings.shareCopyFormat);
+      setGeneratedShare({ url: result.record.url, text: shareText });
+      setActive((current) => current?.record.id === documentId ? {
+        ...current,
+        record: result.document,
+      } : current);
+      await refreshDocuments();
+      setDestination({ kind: 'online-share', label: title, detail: '分享链接已生成' });
+      try {
+        await navigator.clipboard.writeText(shareText);
+        setShareOpen(false);
+        setGeneratedShare(null);
+        setStatus('分享链接已生成并复制。');
+        notify('分享链接已复制，可以直接发给别人。', 'success');
+      } catch {
+        setShareError('链接已经生成，但浏览器没有允许自动复制。请点击“复制分享内容”。');
+      }
+    } catch (error) {
+      setShareError(error instanceof Error ? error.message : '分享失败，请检查存储连接后重试。');
+    } finally {
+      setShareBusy(false);
+    }
+  };
+
+  const copyGeneratedShare = async () => {
+    if (!generatedShare) return;
+    try {
+      await navigator.clipboard.writeText(generatedShare.text);
+      setShareOpen(false);
+      setGeneratedShare(null);
+      setShareError('');
+      setStatus('分享链接已生成并复制。');
+      notify('分享链接已复制，可以直接发给别人。', 'success');
+    } catch {
+      setShareError('浏览器没有允许复制，请在上方选中链接后复制。');
+    }
+  };
+
+  const closeShareDialog = useCallback(() => {
+    setShareOpen(false);
+    setShareError('');
+    setGeneratedShare(null);
+  }, []);
+
+  const openShareSettings = useCallback(() => {
+    setShareOpen(false);
+    setShareError('');
+    setGeneratedShare(null);
+    navigate('settings', new URLSearchParams({ section: 'storage' }));
+  }, [navigate]);
 
   const removeDocument = async (record: DocumentRecord) => {
     if (!window.confirm(`从当前浏览器中移除“${record.title}”？原文件不会被删除。`)) return;
@@ -1113,7 +1211,7 @@ export function MarkdownWorkspace({ route, navigate }: PageProps) {
             </details>
           </div>
           <Button disabled={!active || active.needsSource} icon={Save} onClick={() => void saveCurrent()} size="small">保存</Button>
-          <Button disabled={!active || active.needsSource} icon={Share2} onClick={() => void shareCurrent()} size="small" variant="primary">分享</Button>
+          <Button disabled={!active || active.needsSource} icon={Share2} onClick={shareCurrent} size="small" variant="primary">分享</Button>
         </div>
 
         <FindReplaceBar
@@ -1232,6 +1330,24 @@ export function MarkdownWorkspace({ route, navigate }: PageProps) {
       {dragActive ? <div aria-hidden="true" className="workspace-drop-overlay"><FileText size={34} /><strong>松开即可打开</strong><span>支持 Markdown 文件或文件夹</span></div> : null}
 
       {toast ? <div className={`workspace-toast workspace-toast--${toast.kind}`} key={toast.id} role={toast.kind === 'error' ? 'alert' : 'status'}>{toast.message}</div> : null}
+
+      <ShareDocumentDialog
+        access={shareAccess}
+        busy={shareBusy}
+        error={shareError}
+        format={shareFormat}
+        generatedUrl={generatedShare?.url ?? ''}
+        onAccessChange={setShareAccess}
+        onClose={closeShareDialog}
+        onConfirm={() => void confirmShareCurrent()}
+        onCopyGenerated={() => void copyGeneratedShare()}
+        onFormatChange={chooseShareFormat}
+        onOpenSettings={openShareSettings}
+        open={shareOpen}
+        profile={activeProfile}
+        storageReady={storageReady}
+        title={title}
+      />
 
       <OpenDocumentDialog onClose={() => setOpenDialog(null)} onFiles={importFiles} onUrl={importUrl} open={openDialog !== null} sourceMode={openDialog ?? 'all'} />
     </div>

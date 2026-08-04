@@ -37,5 +37,7 @@ describe('Markdown exporters', () => {
     expect(html).toContain('color-scheme:dark');
     expect(html).toContain('--primary:#f0b429');
     expect(html).toContain('width:min(var(--reading-width),100%)');
+    expect(html).toContain('blockquote{margin:1em 0;');
+    expect(html).toContain('blockquote blockquote{margin-inline-start:1em}');
   });
 });
